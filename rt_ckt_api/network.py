@@ -1,11 +1,31 @@
-import numpy as np
+2cmplximport numpy as np
 import skrf as rf
 import numba as nb
+import numpy as np
 from typing import Optional, Callable, Any, Sequence
 from rt_math_api.utility import ExpressionValue, UNIT_TO_VALUE
 import re
 
 #%% Functions
+
+# 定義 njit 裝飾的函數
+@nb.njit([nb.complex128(nb.float64, nb.float64), nb.complex128[:](nb.float64[:], nb.float64[:]),])
+def ma2cmplx(mag: float|np.ndarray, ang: float|np.ndarray) -> complex|np.ndarray:
+    real = mag * np.cos(np.deg2rad(ang))
+    imag = mag * np.sin(np.deg2rad(ang))
+    return real+1j*imag
+
+@nb.njit([nb.complex128(nb.float64, nb.float64), nb.complex128[:](nb.float64[:], nb.float64[:]),])
+def db2cmplx(db: float|np.ndarray, ang: float|np.ndarray) -> complex|np.ndarray:
+    mag = 10**(db/20)
+    real = mag * np.cos(np.deg2rad(ang))
+    imag = mag * np.sin(np.deg2rad(ang))
+    return real+1j*imag
+
+@nb.njit([nb.complex128(nb.float64, nb.float64), nb.complex128[:](nb.float64[:], nb.float64[:]),])
+def ri2cmplx(real: float|np.ndarray, imag: float|np.ndarray) -> complex|np.ndarray:
+    return real + 1j*imag
+
 @nb.njit(nb.types.Tuple((nb.float64[:], nb.float64[:]))(nb.float64, nb.float64, nb.int64, nb.float64, nb.float64))
 def generate_step_function(start_time: int|float, end_time: int|float, num_points: int, rise_time: float = 50e-12, delay: float = 1e-9):
     """
@@ -140,55 +160,72 @@ class NetworkData():
                 raise ValueError(f'Property {attr} is not supported by skrf.Network.')
             setattr(self, attr, skrf_ntwk_prop)
         
-        # for 
     
     def _load_touchstone(self, touchstone_filepath: str):
+        ''' 
+        目前 skrf.Network 讀取資料已經足夠快了，暫時不需要自己寫讀取函數。
+        如果會用到，需要用到 `ma2cmplx` 、 `db2cmplx` 和 `ri2cmplx` 這幾個函數。
+        '''
         
-        
-        
-        comment_lines: list[str] = []
-        option_line: str = None
-        data: list[str] = []
-        
-        #$ Read the touchstone file
-        with open(touchstone_filepath, 'r') as file_io:
-
-            for line in file_io.readlines():
-                line = line.strip()
+    #     #$ Check the touchstone file extension
+    #     file_extension = touchstone_filepath.split('.')[-1]
+    #     if mo:=re.search(r's(\d+)p', file_extension):
+    #         n_port = int(mo.groups()[0])
+    #     else:
+    #         raise ValueError('Invalid file extension: no port number.')
+    #     #$ Read the touchstone file
+    #     comment_lines: list[str] = []
+    #     option_line: str = None
+    #     data: list[str] = []        
+    #     with open(touchstone_filepath, 'r') as file_io:
+    #         for line in file_io.readlines():
+    #             line = line.strip()
                 
-                #* Deal with comment lines 
-                if line.startswith('!'):
-                    comment_lines += [line]
+    #             #* Deal with comment lines 
+    #             if line.startswith('!'):
+    #                 comment_lines += [line]
                     
-                #* Deal with option line
-                elif line.startswith('#'):
-                    if option_line is not None:
-                        raise ValueError('Multiple option lines are found in the touchstone file.')
+    #             #* Deal with option line
+    #             elif line.startswith('#'):
+    #                 if option_line is not None:
+    #                     raise ValueError('Multiple option lines are found in the touchstone file.')
                     
-                    option_line = line
+    #                 option_line = line
                     
-                    _, freq_unit, ntwk_type, data_format, __, z_ref = re.findall(r'\S+', line)
-                    if __ != 'R':
-                        raise ValueError(f'Wierd option line: {line}')
+    #                 _, freq_unit, ntwk_type, data_format, __, z_ref = re.findall(r'\S+', line)
+    #                 if __ != 'R':
+    #                     raise ValueError(f'Invalid option line: {__}!=R ({line})')
                     
-                    #* Check if the network type is S-parameter or not
-                    if ntwk_type != 'S':
-                        raise ValueError(f'Currently, only S-parameter is supported. Found {ntwk_type}-parameter.')
+    #                 #* Check if the network type is S-parameter or not
+    #                 if ntwk_type != 'S':
+    #                     raise ValueError(f'Currently, only S-parameter is supported. Found {ntwk_type}-parameter.')
                     
-                    #* Check if the data type is valid or not
-                    if data_format.lower() not in ['ma', 'db', 'ri']:
-                        raise ValueError(f'Invalid data type: {data_format}.')
+    #                 #* Check if the data type is valid or not
+    #                 if data_format.lower() not in ['ma', 'db', 'ri']:
+    #                     raise ValueError(f'Invalid data type: {data_format}.')
                 
-                #* Deal with data
-                else:
-                    data += re.findall(r'\S+', line)
+    #             #* Deal with data
+    #             else:
+    #                 data += re.findall(r'\S+', line)
                     
 
-        #$ Process parsed data
-        #: 1. Parse the comment lines
-        ansys_port_pattern = re.compile(r'Port\s+(\d+):\s+Z0\s+=\s+(\d+\.\d+)\s+Ohm')
-        cadence_port_pattern = re.compile(r'POhm')
+    #     #$ Process parsed data
+    #     #: 1. Parse the comment lines
+    #     ansys_port_pattern = re.compile(r'!\s*Port\[(\d+)\] \= (\S+)')
+    #     cadence_port_pattern = re.compile(r'!\s*([^\s\:]+\:\:[^\s\:]+)')
         
+    #     comment_line: str = '\n'.join(comment_lines)
+    #     if mo:=ansys_port_pattern.findall(comment_line):
+    #         port_names = ansys_port_pattern.findall(comment_line)
+    #     elif mo:=cadence_port_pattern.findall(comment_line):
+    #         port_names = cadence_port_pattern.findall(comment_line)
+    #     else:
+    #         port_names = [f'Port_{i}' for i in range(n_port)]
+        
+    #     if len(port_names) != n_port:
+    #         raise ValueError(f'Port number from file extension mismatch with the number of port names in the comment lines.')
+        pass
+
         
     def check_passivity(self) -> list[tuple[int, str, float]]:
         # if self._passivity_matrix is not None:
@@ -201,6 +238,7 @@ class NetworkData():
                     passivity_reports += [(i, str(ExpressionValue(self.f[i], unit='GHz')), passivity_matrix[i, j])]
         
         self._passivity_matrix = passivity_matrix
+        return passivity_reports
     
     def check_causality(self):
         pass
