@@ -27,7 +27,7 @@ patterns = ['*.pyd', '*.c', '*.so', '*.dll']
 
 # 遍歷目錄並刪除匹配的檔案
 root_path = os.path.dirname(__file__)
-for root, dirs, files in os.walk(os.path.join(root_path, 'rt_math_api')):
+for root, dirs, files in os.walk(os.path.join(root_path, 'rt_ckt_api')):
     for pattern in patterns:
         for filename in fnmatch.filter(files, pattern):
             os.remove(os.path.join(root, filename))
@@ -37,6 +37,7 @@ setup_py_path = os.path.join(root_path, 'setup.py')
 t1 = timeit.default_timer()
 os.system(f'python {setup_py_path} build_ext --inplace')
 t2 = timeit.default_timer()
+print('root_path: ', root_path)
 os.system(f'pip install --upgrade {root_path}')
 
 print(f'{t2-t1}sec')

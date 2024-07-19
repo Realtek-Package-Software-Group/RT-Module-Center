@@ -12,7 +12,7 @@ __VERSION__ = '0.0.1'
 __AUTHOR__ = 'Jeff.Chou / Szuhsien.Feng'
 __UPDATED__ = '2024.07.18'
 __DESCRIPTION__ = f'API for circuit models (snp/spice) processing and check (updated at {__UPDATED__})'
-__REQUIREMENT__ = ['numpy', 'numba', 'numexpr', 'skrf']
+__REQUIREMENT__ = ['numpy', 'numba', 'numexpr', 'scikit-rf']
 
 class CustomBuildExt(build_ext):
       
@@ -46,7 +46,7 @@ class CustomBuildExt(build_ext):
 root_path = os.path.dirname(__file__)
 
 # data files
-hook_file_dir = os.path.join(os.path.dirname(__file__), 'rt_math_api', 'hook')
+hook_file_dir = os.path.join(os.path.dirname(__file__), 'rt_ckt_api', 'hook')
 
 pyinstaller_spec = importlib.util.find_spec('PyInstaller')
 if pyinstaller_spec is not None and pyinstaller_spec.submodule_search_locations:
