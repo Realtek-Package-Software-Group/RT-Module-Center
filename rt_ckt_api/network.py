@@ -316,7 +316,7 @@ def execute_cmd_thread(cmd: str) -> threading.Thread:
     thread.start()
     return thread
 
-def check_touchstone_by_genequiv(touchstone_filepath: str, check_passivity: bool = True, check_causality: bool = True, causality_tolerance: float = 0.01, cpu_count: int = -1), :
+def check_touchstone_by_genequiv(touchstone_filepath: str, check_passivity: bool = True, check_causality: bool = True, causality_tolerance: float = 0.01, cpu_count: int = -1):
     
     latest_version_path, latest_version_root = get_ansys_newest_version()
     serial_number = datetime.now().strftime('%Y_%m%d_%H%M%S')
@@ -344,26 +344,46 @@ def check_touchstone_by_genequiv(touchstone_filepath: str, check_passivity: bool
     if check_passivity:
         cmd_list += ['-checkpassivity'] #: Check passivity
     if check_causality:
-        cpu_count = os.cpu_count() if cpu_count < 0 else cpu_count # type:ignore
+        cpu_count = os.cpu_count()//2 if cpu_count < 0 else cpu_count # type:ignore
         cmd_list += ['-checkcausality', #: Check causality
                      '-causality_plots', #: Generate reconstructed touchstone and error/truncation bound touchstone
                      f'-causality_tol {causality_tolerance}', #: Causality tolerance
-                     f'-mp {cpu_count//2}',] #: Multi-processing number
+                     f'-mp {cpu_count//2}', #: Multi-processing number
+                     f'-i {copied_filepath}' #: Input touchstone filepath
+                     ] 
     
     #* Need to  change director
     if platform.system() == 'Windows':
-        command = f'cd "{filepath}"&' + ' '.join(cmd_list)
+        command = f'cd "{copied_filepath.parent}"&' + ' '.join(cmd_list)
     else:
-        command = f'cd "{filepath}";' + ' '.join(cmd_list)
+        command = f'cd "{copied_filepath.parent}";' + ' '.join(cmd_list)
+    
+    
+    print(command, '\n')
     
     thread = execute_cmd_thread(command)
     thread.join()
     
-    result_filepaths: list[str] = []
-    for name in copied_filepath.parent: # type:ignore
-        if 'DiscErrBnd' in name or 'ReconsData' in name or 'TruncErrBnd' in name:
-            result_filepaths += [name]
-    return result_filepaths
+    #: Just for checking the result
+    # result_filepaths: list[str] = []
+    # for name in copied_filepath.parent: # type:ignore
+    #     if 'DiscErrBnd' in name or 'ReconsData' in name or 'TruncErrBnd' in name:
+    #         result_filepaths += [name]
+            
+    causality_infomation: dict[str, rf.Network] = {}
+    for name in os.listdir(copied_filepath.parent): # type:ignore
+        if 'DiscErrBnd' in name:
+            causality_infomation['discretization_error'] = rf.Network(str(copied_filepath.parent / name))
+        elif 'ReconsData' in name:
+            causality_infomation['reconstructed_data'] = rf.Network(str(copied_filepath.parent / name))
+        elif 'TruncErrBnd' in name:
+            causality_infomation['truncation_error'] = rf.Network(str(copied_filepath.parent / name))
+        
+    if set(causality_infomation.keys()) != {'discretization_error', 'reconstructed_data', 'truncation_error'}:
+        raise ValueError('Causality check failed.')
+    
+    
+    return causality_infomation
     
     
 
