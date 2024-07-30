@@ -5,7 +5,8 @@ import numpy as np
 from typing import Optional, Callable, Any, Sequence
 from pathlib import Path
 from datetime import datetime
-
+import time
+import subprocess
 
 from rt_math_api.utility import ExpressionValue, UNIT_TO_VALUE
 from rt_nx_api.eda import CMDThread
@@ -14,6 +15,12 @@ import os
 import platform
 import threading
 import shutil
+
+try:
+    import ctypes
+    import msvcrt
+except:
+    pass
 
 #%% Math Functions
 
@@ -122,9 +129,6 @@ def calculate_passivity_matrix(s_parameter: np.ndarray) -> np.ndarray:
     return passivity_array
 
 
-@nb.njit
-def calculate_causality_matrix(freq, s_parameter, criteria):
-    pass
 
 #%% Other Functions
 
@@ -316,7 +320,8 @@ def execute_cmd_thread(cmd: str) -> threading.Thread:
     thread.start()
     return thread
 
-def check_touchstone_by_genequiv(touchstone_filepath: str, check_passivity: bool = True, check_causality: bool = True, causality_tolerance: float = 0.01, cpu_count: int = -1):
+
+def check_causality_by_genequiv(touchstone_filepath: str, causality_tolerance: float = 0.01, cpu_count: int = -1):
     
     latest_version_path, latest_version_root = get_ansys_newest_version()
     serial_number = datetime.now().strftime('%Y_%m%d_%H%M%S')
@@ -334,21 +339,23 @@ def check_touchstone_by_genequiv(touchstone_filepath: str, check_passivity: bool
         raise FileNotFoundError(f'Touchstone cannot be found: {filepath}')
     
     #* Copy the touchstone file to the temporary directory
-    copied_filepath: Path = Path(filepath.parent / f'.CheckTouchstone_{serial_number}' / filepath.name)
+    # copied_filepath: Path = Path(filepath.parent / f'.CheckTouchstone_{serial_number}' / filepath.name)
+    copied_filepath: Path = Path(os.path.expanduser(f'~/.CheckTouchstone_{serial_number}')) / filepath.name
     if not copied_filepath.parent.exists():
         copied_filepath.parent.mkdir()
     shutil.copy(str(filepath), str(copied_filepath))
     
     #* Prepare the command flags
     cmd_list: list[str] = [f'"{genequiv_exepath}"']
-    if check_passivity:
-        cmd_list += ['-checkpassivity'] #: Check passivity
-    if check_causality:
-        cpu_count = os.cpu_count()//2 if cpu_count < 0 else cpu_count # type:ignore
-        cmd_list += ['-checkcausality', #: Check causality
+    cpu_count = os.cpu_count()//2 if cpu_count < 0 else cpu_count # type:ignore
+    cmd_list += ['-checkcausality', #: Check causality
                      '-causality_plots', #: Generate reconstructed touchstone and error/truncation bound touchstone
                      f'-causality_tol {causality_tolerance}', #: Causality tolerance
-                     f'-mp {cpu_count//2}', #: Multi-processing number
+                     f'-mp {cpu_count}', #: Multi-processing number
+                     # f'-prof {copied_filepath.parent/"log.txt"}', #: Profiling
+                     f'-cccontinuation 0 ', 
+                     f'-ccinterp 1', #: Interpolation method (猜測NDE預設)
+                     f'-ccintegration 2', #: Integration method (猜測NDE預設)
                      f'-i {copied_filepath}' #: Input touchstone filepath
                      ] 
     
@@ -358,18 +365,12 @@ def check_touchstone_by_genequiv(touchstone_filepath: str, check_passivity: bool
     else:
         command = f'cd "{copied_filepath.parent}";' + ' '.join(cmd_list)
     
-    
-    print(command, '\n')
+    print(command)
     
     thread = execute_cmd_thread(command)
     thread.join()
     
-    #: Just for checking the result
-    # result_filepaths: list[str] = []
-    # for name in copied_filepath.parent: # type:ignore
-    #     if 'DiscErrBnd' in name or 'ReconsData' in name or 'TruncErrBnd' in name:
-    #         result_filepaths += [name]
-            
+    #: Load the causality information (reconstructed s-parameter and discretization/truncation error bound )
     causality_infomation: dict[str, rf.Network] = {}
     for name in os.listdir(copied_filepath.parent): # type:ignore
         if 'DiscErrBnd' in name:
@@ -381,7 +382,6 @@ def check_touchstone_by_genequiv(touchstone_filepath: str, check_passivity: bool
         
     if set(causality_infomation.keys()) != {'discretization_error', 'reconstructed_data', 'truncation_error'}:
         raise ValueError('Causality check failed.')
-    
     
     return causality_infomation
     
@@ -416,9 +416,15 @@ class NetworkData():
     _tdr_delay: float = None
     _tdr_time: np.ndarray = None
     _tdr: np.ndarray = None
-    _passivity_matrix: np.ndarray = None
-    _causality_matrix: np.ndarray = None
     
+    #* Passivity
+    _passivity_matrix: np.ndarray = None
+    
+    #* Causality
+    _reconstructed_network: rf.Network = None
+    _truncation_error_network: rf.Network = None
+    _discretization_error_network: rf.Network = None
+    _causality_matrix: np.ndarray = None
     def __init__(self, touchstone_filepath: str = '', s_parameter: Optional[np.ndarray] = None, freq: Optional[np.ndarray] = None, z0: Optional[np.ndarray] = None, ):
         
         #* Load the raw network data
@@ -461,7 +467,6 @@ class NetworkData():
         self.n_freq = self.network.f.shape[0]
         self.n_port = self.network.nports
         self.filepath = touchstone_filepath
-        
         
         #* Load skrf.Network property
         self._dynamic_load_network_parameter(self.network)
@@ -506,8 +511,44 @@ class NetworkData():
         self._passivity_matrix = passivity_matrix
         return passivity_reports
     
-    def check_causality(self):
-        pass
+    def check_causality(self, causality_tolerance: float = 0.01, cpu_count: int = -1):
+        
+        t1 = time.time() #: Start time
+        
+        causality_infomation = check_causality_by_genequiv(self.filepath, causality_tolerance=causality_tolerance, cpu_count=cpu_count)
+        self._reconstructed_network = causality_infomation['reconstructed_data']
+        self._truncation_error_network = causality_infomation['truncation_error']
+        self._discretization_error_network = causality_infomation['discretization_error']
+        
+        
+        reconstructed_error: np.ndarray = abs(self.network.s - self._reconstructed_network.s)
+        truncation_error: np.ndarray = abs(self._truncation_error_network.s[:,0,0])
+        discretization_error: np.ndarray = abs(self._discretization_error_network.s)
+        
+        causality_matrix: np.ndarray = np.zeros_like(self.network.s, dtype=np.int64)
+        causality_reports: list = []
+        for i in range(self.n_freq):
+            _ith_report: dict = {'index':i, 'freq': str(ExpressionValue(self.f[i], unit='GHz')), 'inconclusive': [],  'noncausal': []}
+            for j in range(self.n_port):
+                for k in range(self.n_port):
+                    
+                    if discretization_error[i,j,k] + truncation_error[i] > causality_tolerance:
+                        causality_matrix[i,j,k] = 1
+                        _ith_report['inconclusive'] += [(j, k)]                    
+                    elif abs(reconstructed_error[i,j,k]) > causality_tolerance:
+                        causality_matrix[i,j,k] = 0
+                        _ith_report['noncausal'] += [(j, k)]
+                    else:
+                        causality_matrix[i,j,k] = 2
+            if not (_ith_report['inconclusive'] is [] and _ith_report['noncausal'] is  []):
+                causality_reports += [_ith_report]
+        
+        t2 = time.time() #: End time
+        print(f'Causality check takes {t2-t1:.2f}sec')
+        
+        
+        self._causality_matrix = causality_matrix
+        return causality_reports
     
     def linearly_interpolate(self):
         # '''Interpolate the s parameters in the same range of loaded frequency but with linearly spaced frequency points.'''

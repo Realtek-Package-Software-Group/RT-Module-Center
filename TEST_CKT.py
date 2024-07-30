@@ -291,7 +291,9 @@ def check_touchstone_by_genequiv(touchstone_filepath: str, check_passivity: bool
 
 
 path = r'D:/Users/szuhsien.feng/Desktop/TEMP/TestCausality/RL7025_BGAc_AFE_Q3DSNP_20240708.s103p'
-causality_infomation = check_touchstone_by_genequiv(path)
+path = r'D:/Users/szuhsien.feng/Desktop/TEMP/TestCausality/my_sparam_1p0.s4p'
+path= r'D:/Users/szuhsien.feng/Desktop/TEMP/TestCausality/3_WBGA_Channel_240704_153134.s4p'
+causality_infomation = check_touchstone_by_genequiv(path, causality_tolerance=0.00001)
 
 
 #%%
@@ -311,16 +313,21 @@ tol_err = 0.01
 for k in range(n_freq):
     for i, j in ntwk.port_tuples:
         s = recon_ntwk.s[k, i, j]
-        upper_bound_s[k, i, j] = (abs(s) + tol_err + disc_error.s[k, i, j] + trunc_ntwk[k]) / abs(s) * s
-        lower_bound_s[k, i, j] = (abs(s) - tol_err - disc_error.s[k, i, j] - trunc_ntwk[k]) / abs(s) * s
+        upper_bound_s[k, i, j] = (abs(s)  + disc_error.s[k, i, j] + trunc_ntwk[k]) / abs(s) * s
+        lower_bound_s[k, i, j] = (abs(s)  - disc_error.s[k, i, j] - trunc_ntwk[k]) / abs(s) * s
         
         # causality_value[k, i, j] = abs(ntwk.s[k, i, j] - recon_ntwk.s[k, i, j]) - disc_error.s[k, i, j].real - trunc_ntwk[k] -  tol_err
 
 #%%
+# plt.plot(ntwk.f, db(abs(recon_ntwk.s-ntwk.s)[:,0,0]), label='reconstruct error DB')
+# plt.plot(ntwk.f, db((disc_error.s)[:,0,0]+trunc_ntwk), label='error bound DB')
+# plt.plot(ntwk.f, db(trunc_ntwk), label='error bound DB2')
+# plt.plot(ntwk.f, db(abs(recon_ntwk.s-ntwk.s)[:,0,0])-db((disc_error.s)[:,0,0]+trunc_ntwk), label='reconstruct error DB')
+
 
 plt.plot(ntwk.f, abs(recon_ntwk.s-ntwk.s)[:,0,0], label='reconstruct error')
 plt.plot(ntwk.f, abs(disc_error.s)[:,0,0]+trunc_ntwk, label='error bound')
-plt.plot(ntwk.f, [tol_err]*ntwk.f.shape[0])
+# plt.plot(ntwk.f, [tol_err]*ntwk.f.shape[0])
 plt.yscale('log')
 plt.legend()
 
@@ -345,10 +352,10 @@ else:
 
 
 
-
+plt.figure(dpi=500)
 plt.plot(myfunc(ntwk.s[:,0,0]), label='RawData')
-plt.plot(myfunc(upper_bound_s[:,0,0]), label='UpperBound')
-plt.plot(myfunc(lower_bound_s[:,0,0]), label='LowerBound')
+plt.plot(myfunc(upper_bound_s[:,0,0]), label='UpperBound', ls='--')
+plt.plot(myfunc(lower_bound_s[:,0,0]), label='LowerBound',ls='--')
 
 # if mylim:
 #     plt.ylim(*mylim)
