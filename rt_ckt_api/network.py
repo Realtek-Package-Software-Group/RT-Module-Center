@@ -349,15 +349,15 @@ def check_causality_by_genequiv(touchstone_filepath: str, causality_tolerance: f
     cmd_list: list[str] = [f'"{genequiv_exepath}"']
     cpu_count = os.cpu_count()//2 if cpu_count < 0 else cpu_count # type:ignore
     cmd_list += ['-checkcausality', #: Check causality
-                     '-causality_plots', #: Generate reconstructed touchstone and error/truncation bound touchstone
-                     f'-causality_tol {causality_tolerance}', #: Causality tolerance
-                     f'-mp {cpu_count}', #: Multi-processing number
-                     # f'-prof {copied_filepath.parent/"log.txt"}', #: Profiling
-                     f'-cccontinuation 0 ', 
-                     f'-ccinterp 1', #: Interpolation method (猜測NDE預設)
-                     f'-ccintegration 2', #: Integration method (猜測NDE預設)
-                     f'-i {copied_filepath}' #: Input touchstone filepath
-                     ] 
+                 '-causality_plots', #: Generate reconstructed touchstone and error/truncation bound touchstone
+                 f'-causality_tol {causality_tolerance}', #: Causality tolerance
+                 f'-mp {cpu_count}', #: Multi-processing number
+                 # f'-prof {copied_filepath.parent/"log.txt"}', #: Profiling
+                #  f'-cccontinuation 0 ', 
+                 f'-ccinterp 1', #: Interpolation method (猜測NDE預設)
+                 f'-ccintegration 2', #: Integration method (猜測NDE預設)
+                 f'-i {copied_filepath}' #: Input touchstone filepath
+                 ] 
     
     #* Need to  change director
     if platform.system() == 'Windows':
@@ -500,7 +500,7 @@ class NetworkData():
         self._dynamic_load_network_parameter(self.network) #* Reload the network parameters
 
     def check_passivity(self) -> list[tuple[int, str, float]]:
-        passivity_matrix = calculate_passivity_matrix(self.s)
+        passivity_matrix = calculate_passivity_matrix(self.network.s)
 
         passivity_reports: list = []
         for i in range(self.n_freq):
@@ -513,7 +513,7 @@ class NetworkData():
     
     def check_causality(self, causality_tolerance: float = 0.01, cpu_count: int = -1):
         
-        t1 = time.time() #: Start time
+        # t1 = time.time() #: Start time
         
         causality_infomation = check_causality_by_genequiv(self.filepath, causality_tolerance=causality_tolerance, cpu_count=cpu_count)
         self._reconstructed_network = causality_infomation['reconstructed_data']
@@ -540,11 +540,11 @@ class NetworkData():
                         _ith_report['noncausal'] += [(j, k)]
                     else:
                         causality_matrix[i,j,k] = 2
-            if not (_ith_report['inconclusive'] is [] and _ith_report['noncausal'] is  []):
+            if _ith_report['inconclusive'] or _ith_report['noncausal']:
                 causality_reports += [_ith_report]
         
-        t2 = time.time() #: End time
-        print(f'Causality check takes {t2-t1:.2f}sec')
+        # t2 = time.time() #: End time
+        # print(f'Causality check takes {t2-t1:.2f}sec')
         
         
         self._causality_matrix = causality_matrix

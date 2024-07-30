@@ -8,9 +8,9 @@ from setuptools.extension import Extension
 from distutils.command.build_ext import build_ext
 
 __MODULE_NAME__ = 'rt_ckt_api'
-__VERSION__ = '0.0.1'
+__VERSION__ = '0.0.2'
 __AUTHOR__ = 'Jeff.Chou / Szuhsien.Feng'
-__UPDATED__ = '2024.07.18'
+__UPDATED__ = '2024.07.31'
 __DESCRIPTION__ = f'API for circuit models (snp/spice) processing and check (updated at {__UPDATED__})'
 __REQUIREMENT__ = ['numpy', 'numba', 'numexpr', 'scikit-rf']
 
