@@ -10,11 +10,14 @@ import subprocess
 
 from rt_math_api.utility import ExpressionValue, UNIT_TO_VALUE
 from rt_nx_api.eda import CMDThread
+from rt_nx_api.eda import LicenseClient
+
 import re
 import os
 import platform
 import threading
 import shutil
+import tempfile
 
 try:
     import ctypes
@@ -199,7 +202,7 @@ def check_causality_by_genequiv(touchstone_filepath: str, causality_tolerance: f
     # copied_filepath: Path = Path(filepath.parent / f'.CheckTouchstone_{serial_number}' / filepath.name)
     copied_filepath: Path = Path(os.path.expanduser(f'~/.CheckTouchstone_{serial_number}')) / filepath.name
     if not copied_filepath.parent.exists():
-        copied_filepath.parent.mkdir()
+        copied_filepath.parent.mkdir(parents=True)
     shutil.copy(str(filepath), str(copied_filepath))
     
     #* Prepare the command flags
@@ -213,17 +216,22 @@ def check_causality_by_genequiv(touchstone_filepath: str, causality_tolerance: f
                 #  f'-cccontinuation 0 ', 
                  f'-ccinterp 1', #: Interpolation method (猜測NDE預設)
                  f'-ccintegration 2', #: Integration method (猜測NDE預設)
-                 f'-i {copied_filepath}' #: Input touchstone filepath
+                 f'-i "{copied_filepath}"' #: Input touchstone filepath
                  ] 
     
     #* Need to  change director
+    rt_license_client = LicenseClient()
+    
     if platform.system() == 'Windows':
         command = f'cd "{copied_filepath.parent}"&' + ' '.join(cmd_list)
     else:
-        command = f'cd "{copied_filepath.parent}";' + ' '.join(cmd_list)
+        command = (f'setenv ANSYSLMD_LICENSE_FILE {":".join(rt_license_client.ANSYS_LICENSE_SERVER_LIST)};' 
+                   + f'cd "{copied_filepath.parent}";' 
+                   + ' '.join(cmd_list))
     
+    # print('\n')
     # print(command)
-    
+    # print('\n')
     thread = CMDThread(command, show_cmd_output=False)
     thread.start()
     thread.join()
@@ -240,7 +248,12 @@ def check_causality_by_genequiv(touchstone_filepath: str, causality_tolerance: f
             causality_infomation['truncation_error'] = rf.Network(str(copied_filepath.parent / name))
         
     if set(causality_infomation.keys()) != {'discretization_error', 'reconstructed_data', 'truncation_error'}:
-        raise ValueError('Causality check failed.')
+        # print(' )
+        raise ValueError('Causality check failed.' + 'Information to debug: \n' + command)
+    
+    
+    #* Delete the copied touchstone file
+    shutil.rmtree(copied_filepath.parent)
     
     return causality_infomation
     
@@ -277,13 +290,21 @@ class NetworkData():
     _tdr: np.ndarray = None
     
     #* Passivity
+    _is_passive: bool = None
     _passivity_matrix: np.ndarray = None
+    _passivity_reports: list[dict] = None
     
     #* Causality
+    _is_causal: bool = None
     _reconstructed_network: rf.Network = None
     _truncation_error_network: rf.Network = None
     _discretization_error_network: rf.Network = None
     _causality_matrix: np.ndarray = None
+    _causality_reports: list[dict] = None
+    
+    #* Reciprocity
+    _is_reciprocal: bool = None
+    
     def __init__(self, touchstone_filepath: str = '', s_parameter: Optional[np.ndarray] = None, freq: Optional[np.ndarray] = None, z0: Optional[np.ndarray] = None, ):
         
         #* Load the raw network data
@@ -293,14 +314,17 @@ class NetworkData():
             s: np.ndarray = ts.s
             n_freq: int = s.shape[0]
             n_port: int = s.shape[1]
-            reference_impedance = ts.resistance # type:ignore
-            # print('reference_impedance', reference_impedance)
+            reference_impedance:int|float = ts.resistance # type:ignore
+            frequency_unit = next((unit for unit in UNIT_TO_VALUE if ts.frequency_unit.upper()==unit.upper()), 'GHz')
+            
+
             #* Check if `reference_impedance` is wrongly parsed 
             expected_z0 = np.tile(reference_impedance, (n_freq, n_port))  # type:ignore
             if not (ts.z0 == expected_z0).all():
                 print(f'Warning: touchstone "{touchstone_filepath}" seems parse wrong reference impedance. Corrected to {reference_impedance}.')
             
             self.reference_impedance = reference_impedance
+            self.frequency_unit = frequency_unit
             self.network = rf.Network(s=s, f=f, z0=expected_z0)
             self.network.comments = ts.get_comments()
             self.network.comments_after_option_line = ts.comments_after_option_line
@@ -334,10 +358,15 @@ class NetworkData():
         '''Load the supported properties of skrf.Network to the NetworkData object.'''
         for attr in self.SUPPORTED_NETWORK_DATA_PROPERTIES + ['f', 'port_names', 'port_modes', ]:
             skrf_ntwk_prop = getattr(network, attr, None)
-            if skrf_ntwk_prop is None:
-                raise ValueError(f'Property {attr} is not supported by skrf.Network.')
-            setattr(self, attr, skrf_ntwk_prop)
+            if skrf_ntwk_prop is not None:
+                setattr(self, attr, skrf_ntwk_prop)
 
+    def check_reciprocity(self) -> bool:
+        '''Check if the network is reciprocal or not.'''
+        if not self._is_reciprocal:
+            self._is_reciprocal = self.network.is_reciprocal()
+        return self._is_reciprocal
+    
     @property
     def passivity_matrix(self):
         if self._passivity_matrix is None:
@@ -355,30 +384,62 @@ class NetworkData():
         
         if self.fitted_network:
             self.fitted_network.se2gmm(p=n_channel)
-            
+        
+        #* Reset passivty/causality/reciprocity check
+        self._is_reciprocal = None
+        self._is_passive = None
+        self._is_causal = None
+        self._passivity_matrix = None
+        self._passivity_reports = None
+        self._causality_matrix = None
+        self._causality_reports = None
+        
         self._dynamic_load_network_parameter(self.network) #* Reload the network parameters
 
-    def check_passivity(self) -> list[tuple[int, str, float]]:
+    @property
+    def passivity_reports(self) -> list[dict]:
+        '''
+        Return the passivity reports.
+        Item-Dictionary: {'index':frequecny index, 'freq': frequency string, 'nonpassive': [(port index, power summation), ...]}
+        '''
+        if self._passivity_reports is None:
+            self.check_passivity()
+        return self._passivity_reports
+    
+    def check_passivity(self) -> bool:
         passivity_matrix = calculate_passivity_matrix(self.network.s)
 
-        passivity_reports: list = []
+        passivity_reports: list[dict] = []
         for i in range(self.n_freq):
+            _ith_report: dict = {'index':i, 'freq': str(ExpressionValue(self.f[i], unit='Hz').string), 'nonpassive': []}
             for j in range(self.n_port):
                 if passivity_matrix[i, j] > 1:
-                    passivity_reports += [(i, str(ExpressionValue(self.f[i], unit='GHz')), passivity_matrix[i, j])]
+                    # passivity_reports += [(i, j, str(ExpressionValue(self.f[i], unit='GHz')), passivity_matrix[i, j])]
+                    _ith_report['nonpassive'] += [(j, passivity_matrix[i, j])]
+            if _ith_report['nonpassive']:
+                passivity_reports += [_ith_report]
         
         self._passivity_matrix = passivity_matrix
-        return passivity_reports
+        self._passivity_reports = passivity_reports
+        self._is_passive = not passivity_reports
+
+        return self._is_passive
     
-    def check_causality(self, causality_tolerance: float = 0.01, cpu_count: int = -1):
-        
-        # t1 = time.time() #: Start time
-        
+    @property
+    def causality_reports(self) -> list[dict]:
+        '''
+        Return the causality reports.
+        Item-dictionary: {'index': frequency index, 'freq': frequency string, 'inconclusive': [(port index, port index), ...], 'noncausal': [(port index, port index), ...]}
+        '''
+        if self._causality_reports is None:
+            self.check_causality()
+        return self._causality_reports
+    
+    def check_causality(self, causality_tolerance: float = 0.01, cpu_count: int = -1) -> bool:
         causality_infomation = check_causality_by_genequiv(self.filepath, causality_tolerance=causality_tolerance, cpu_count=cpu_count)
         self._reconstructed_network = causality_infomation['reconstructed_data']
         self._truncation_error_network = causality_infomation['truncation_error']
         self._discretization_error_network = causality_infomation['discretization_error']
-        
         
         reconstructed_error: np.ndarray = abs(self.network.s - self._reconstructed_network.s)
         truncation_error: np.ndarray = abs(self._truncation_error_network.s[:,0,0])
@@ -387,10 +448,10 @@ class NetworkData():
         causality_matrix: np.ndarray = np.zeros_like(self.network.s, dtype=np.int64)
         causality_reports: list = []
         for i in range(self.n_freq):
-            _ith_report: dict = {'index':i, 'freq': str(ExpressionValue(self.f[i], unit='GHz')), 'inconclusive': [],  'noncausal': []}
+            _ith_report: dict = {'index':i, 'freq': str(ExpressionValue(self.f[i], unit='Hz').string), 'inconclusive': [],  'noncausal': []}
             for j in range(self.n_port):
-                for k in range(self.n_port):
-                    
+                second_port_index_range: list = [0, self.n_port-1] if not self.check_reciprocity() else [j, self.n_port-1]
+                for k in range(*second_port_index_range):
                     if discretization_error[i,j,k] + truncation_error[i] > causality_tolerance:
                         causality_matrix[i,j,k] = 1
                         _ith_report['inconclusive'] += [(j, k)]                    
@@ -407,7 +468,9 @@ class NetworkData():
         
         
         self._causality_matrix = causality_matrix
-        return causality_reports
+        self._causality_reports = causality_reports
+        self._is_causal = not causality_reports
+        return self._is_causal
     
     def linearly_interpolate(self):
         # '''Interpolate the s parameters in the same range of loaded frequency but with linearly spaced frequency points.'''
