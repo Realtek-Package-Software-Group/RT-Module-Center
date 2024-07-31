@@ -178,149 +178,6 @@ def get_ansys_newest_version() -> tuple[str, str]:
     # print(version_dirs)  # Optional: print all detected versions
     return latest_version_path, latest_version_root
 
-class WindowsCMDThread(threading.Thread):
-    '''
-    Copy CustomThread in eda.py to do similar job in WindowS
-    
-    Notes: when Windows return output, \r is also used.
-    '''
-    _thread_id = None
-    stdout_log_text = ''
-    stderr_log_text = ''
-    cmd_process = None
-    sub_process_collecter = None # * Use for killing sub-process
-    stop_flag = False
-    
-    def __init__(self, cmd ):
-        
-        self.cmd = cmd
-        self.custom_killed = False
-        
-        super().__init__(daemon=False)
-        
-    def run(self):
-        
-        self.cmd_process = subprocess.Popen(self.cmd, shell=True, text=True, encoding='utf-8', stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        
-        #* Start to collect sub-process pid
-        # self.sub_process_collecter = SubProcessThread(self.cmd_process.pid)
-        # self.sub_process_collecter.start()
-        # print('This is ', self.cmd_process.pid)
-        self.process_output()
-        
-        #* Make sure the process is stop properly
-        # while True:
-        #     if self.cmd_process.poll() is not None:
-        #         self.sub_process_collecter.is_closed = True # * Let sub_process_collecter kill sub-process
-        #         break
-        #     time.sleep(1)
-
-
-    def set_non_blocking_pipe(self, fd):
-        PIPE_NOWAIT = ctypes.wintypes.DWORD(0x00000001)
-        handle = msvcrt.get_osfhandle(fd)
-        ctypes.windll.kernel32.SetNamedPipeHandleState(handle, ctypes.byref(PIPE_NOWAIT), None, None)
-
-    def is_data_available(self, fd):
-        handle = msvcrt.get_osfhandle(fd)
-        available = ctypes.wintypes.DWORD()
-        ctypes.windll.kernel32.PeekNamedPipe(handle, None, 0, None, ctypes.byref(available), None)
-        return available.value > 0
-
-    def read_non_blocking(self, fd):
-        handle = msvcrt.get_osfhandle(fd)
-        available = ctypes.wintypes.DWORD()
-        ctypes.windll.kernel32.PeekNamedPipe(handle, None, 0, None, ctypes.byref(available), None)
-        if available.value > 0:
-            return os.read(fd, available.value)
-        return b''
-
-    def process_output(self):
-        
-        if not self.cmd_process:
-            return
-        
-        
-        stdout_partial = ''
-        stderr_partial = ''       
-        
-        assert self.cmd_process.stdout is not None
-        assert self.cmd_process.stderr is not None
-        stdout_fileno = self.cmd_process.stdout.fileno()
-        stderr_fileno = self.cmd_process.stderr.fileno()         
-        while True:
-            if self.is_data_available(stdout_fileno):
-                stdout_partial += self.read_non_blocking(stdout_fileno).decode('utf-8', errors='ignore')
-                lines = stdout_partial.split('\n')
-                stdout_partial = lines.pop()  # 保留最後一個未完成的行
-                for line in lines:
-                    self.stdout_log_text += f'{line.strip()}\n'
-                    print(f"[STDOUT] {line}")
-
-            if self.is_data_available(self.cmd_process.stderr.fileno()):
-                stderr_partial += self.read_non_blocking(stderr_fileno).decode('utf-8', errors='ignore')
-                lines = stderr_partial.split('\n')
-                stderr_partial = lines.pop()  # 保留最後一個未完成的行
-                for line in lines:
-                    self.stderr_log_text += f'{line.strip()}\n'
-                    print(f"[STDERR] {line}")
-
-            if self.cmd_process.poll() is not None:
-                break
-
-        # 處理最後一部分緩衝區
-        if stdout_partial:
-            self.stderr_log_text += f'{stdout_partial.strip()}\n'
-            print(f"[STDOUT] {stdout_partial}")
-        if stderr_partial:
-            self.stderr_log_text += f'{stderr_partial.strip()}\n'
-            print(f"[STDERR] {stderr_partial}")
-
-        # close stream
-        self.cmd_process.wait() # wait for sub-process to finish
-        self.cmd_process.stdout.close()
-        self.cmd_process.stderr.close()
-        
-    @property
-    def thread_id(self):
-        if self._thread_id is None:
-            self._thread_id = ctypes.c_long(self.ident)
-        return self._thread_id
-    
-    def raise_exception(self):
-        if self.daemon:
-            print('Can not raise an exception to a daemon thread!!')
-        else:
-            result = ctypes.pythonapi.PyThreadState_SetAsyncExc(self.thread_id, ctypes.py_object(SystemExit))
-            print(f'thread:raise_exception', result)
-            if result == 0:
-                print(f'invalid thread id:{self.thread_id}')
-                raise ValueError(f'invalid thread id:{self.thread_id}')
-            elif result == 1:
-                print(f'thread {self.thread_id} terminated')
-            elif result > 1:
-                ctypes.pythonapi.PyThreadState_SetAsyncExc(self.thread_id, None)
-                print(f"thread {self.thread_id}:PyThreadState_SetAsyncExc failed")
-                raise SystemError(f"thread {self.thread_id}:PyThreadState_SetAsyncExc failed")
-            
-    def custom_kill(self):
-        self.custom_killed = True
-        self.raise_exception()
-        
-
-def execute_cmd_thread(cmd: str) -> threading.Thread:
-    
-    if platform.system() == 'Windows':
-        thread = WindowsCMDThread(cmd)
-    elif platform.system() == 'Linux':
-        thread = CMDThread(cmd)
-    else:
-        raise ValueError('Unsupported Platform')
-    
-    thread.start()
-    return thread
-
-
 def check_causality_by_genequiv(touchstone_filepath: str, causality_tolerance: float = 0.01, cpu_count: int = -1):
     
     latest_version_path, latest_version_root = get_ansys_newest_version()
@@ -365,10 +222,12 @@ def check_causality_by_genequiv(touchstone_filepath: str, causality_tolerance: f
     else:
         command = f'cd "{copied_filepath.parent}";' + ' '.join(cmd_list)
     
-    print(command)
+    # print(command)
     
-    thread = execute_cmd_thread(command)
+    thread = CMDThread(command, show_cmd_output=False)
+    thread.start()
     thread.join()
+    # time.sleep(1)
     
     #: Load the causality information (reconstructed s-parameter and discretization/truncation error bound )
     causality_infomation: dict[str, rf.Network] = {}
@@ -613,10 +472,10 @@ class NetworkData():
     
     
     # def _load_touchstone(self, touchstone_filepath: str):
-    #     ''' 
-    #     目前 skrf.Network 讀取資料已經足夠快了，暫時不需要自己寫讀取函數。
-    #     如果會用到，需要用到 `ma2cmplx` 、 `db2cmplx` 和 `ri2cmplx` 這幾個函數。
-    #     '''
+    #!     ''' 
+    #!     目前 skrf.Network 讀取資料已經足夠快了，暫時不需要自己寫讀取函數。
+    #!     如果會用到，需要用到 `ma2cmplx` 、 `db2cmplx` 和 `ri2cmplx` 這幾個函數。
+    #!     '''
         
     #     #$ Check the touchstone file extension
     #     file_extension = touchstone_filepath.split('.')[-1]
