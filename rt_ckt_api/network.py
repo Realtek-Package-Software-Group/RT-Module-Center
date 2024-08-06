@@ -1,3 +1,7 @@
+from datetime import datetime
+# t1 = datetime.now()
+
+
 import numpy as np
 import skrf as rf
 import numba as nb
@@ -24,6 +28,8 @@ try:
     import msvcrt
 except:
     pass
+
+# t2 = datetime.now()
 
 #%% Math Functions
 
@@ -213,7 +219,7 @@ def check_causality_by_genequiv(touchstone_filepath: str, causality_tolerance: f
                  f'-causality_tol {causality_tolerance}', #: Causality tolerance
                  f'-mp {cpu_count}', #: Multi-processing number
                  # f'-prof {copied_filepath.parent/"log.txt"}', #: Profiling
-                #  f'-cccontinuation 0 ', 
+                 f'-cccontinuation 0', 
                  f'-ccinterp 1', #: Interpolation method (猜測NDE預設)
                  f'-ccintegration 2', #: Integration method (猜測NDE預設)
                  f'-i "{copied_filepath}"' #: Input touchstone filepath
@@ -228,13 +234,19 @@ def check_causality_by_genequiv(touchstone_filepath: str, causality_tolerance: f
         command = (f'setenv ANSYSLMD_LICENSE_FILE {":".join(rt_license_client.ANSYS_LICENSE_SERVER_LIST)};' 
                    + f'cd "{copied_filepath.parent}";' 
                    + ' '.join(cmd_list))
+        command = f'csh -c \'{command}\''
+
     
     # print('\n')
     # print(command)
     # print('\n')
-    thread = CMDThread(command, show_cmd_output=False)
+    thread = CMDThread(command, show_cmd_output=False)#: Command 預設是Bash
     thread.start()
     thread.join()
+    while True:
+        if thread.cmd_process.poll() is not None:
+            break
+        
     # time.sleep(1)
     
     #: Load the causality information (reconstructed s-parameter and discretization/truncation error bound )
@@ -258,7 +270,7 @@ def check_causality_by_genequiv(touchstone_filepath: str, causality_tolerance: f
     return causality_infomation
     
     
-
+# t3 = datetime.now()
 
 #%% Objects
 class NetworkData():
@@ -303,6 +315,8 @@ class NetworkData():
     _causality_reports: list[dict] = None
     
     #* Reciprocity
+    _reciprocity_matrix: np.ndarray = None
+    _reciprocity_reports: list[dict] = None
     _is_reciprocal: bool = None
     
     def __init__(self, touchstone_filepath: str = '', s_parameter: Optional[np.ndarray] = None, freq: Optional[np.ndarray] = None, z0: Optional[np.ndarray] = None, ):
@@ -361,18 +375,67 @@ class NetworkData():
             if skrf_ntwk_prop is not None:
                 setattr(self, attr, skrf_ntwk_prop)
 
-    def check_reciprocity(self) -> bool:
-        '''Check if the network is reciprocal or not.'''
-        if not self._is_reciprocal:
-            self._is_reciprocal = self.network.is_reciprocal()
+    @property
+    def is_reciprocal(self) -> bool:
+        if self._is_reciprocal is None:
+            self.check_reciprocity()
         return self._is_reciprocal
     
     @property
-    def passivity_matrix(self):
-        if self._passivity_matrix is None:
-            self.check_passivity()
-        return self._passivity_matrix
+    def reciprocity_matrix(self) -> np.ndarray:
+        '''Return the reciprocity matrix, where 2 -> reciprocal; 1 -> almost; 0 -> non-reciprocal.'''
+        if self._reciprocity_matrix is None:
+            self.check_reciprocity()
+        return self._reciprocity_matrix
+    
+    @property
+    def reciprocity_reports(self) -> list[dict]:
+        if self._reciprocity_reports is None:
+            self.check_reciprocity()
+        return self._reciprocity_reports
+    
+    def check_reciprocity(self, abs_error: float = 1e-9, rel_error_min: float = 0, rel_error_max: float = 0.05) -> bool:
+        '''Check if the network is reciprocal or not.'''
+        if self._is_reciprocal is None:
+            # self._is_reciprocal = self.network.is_reciprocal()
+            reciprocity_matrix: np.ndarray = np.zeros_like(self.network.s, dtype=np.int64) #: 2 -> reciprocal; 1 -> almost; 0 -> non-reciprocal
+            reciprocity_reports: list[dict] = []
+            for k, s in enumerate(self.network.s):
+                reciprocal: dict[tuple[int, int], tuple[float, float]] = {}
+                nonreciprocal: dict[tuple[int, int], tuple[float, float]] = {}
+                almost: dict[tuple[int, int], tuple[float, float]] = {}
+                
+                transposed_s = s.transpose()
+                delta_s = s - transposed_s
+                for i in range(self.n_port):
+                    for j in range(i, self.n_port):
+                        #: 1. Use absolute error to judge
+                        #: 2. If failing, to use relative error to judge
+                        rel_err = abs(delta_s[i, j]) / max(abs(s[i, j]), abs(s[j, i]))
+                        abs_err = abs(delta_s[i, j])
+                        if abs(delta_s[i, j]) <= abs_error or rel_err <= rel_error_min:
+                            reciprocity_matrix[k, i, j] = 2
+                            reciprocal[(i, j)] = (abs_err, rel_err)
+                        elif rel_error_min < rel_err <= rel_error_max:
+                            reciprocity_matrix[k, i, j] = 1
+                            almost[(i, j)] = (abs_error, rel_err)
+                        else:
+                            reciprocity_matrix[k, i, j] = 0
+                            nonreciprocal[(i, j)] = (abs_err, rel_err)
+                        reciprocity_matrix[k, j, i] = reciprocity_matrix[k, i, j]
+                reciprocity_reports += [{'index':k, 
+                                         'freq': ExpressionValue(self.f[k], unit='Hz').string, 
+                                         'reciprocal': reciprocal, 
+                                         'nonreciprocal': nonreciprocal, 
+                                         'almost': almost}]
+            
+            #* If zero in reciprocity_matrix, give False to _is_reciprocal
+            self._reciprocity_matrix = reciprocity_matrix
+            self._reciprocity_reports = reciprocity_reports
+            self._is_reciprocal = (reciprocity_matrix != 0).all()
 
+        return self._is_reciprocal
+    
     def single_to_mixmode(self, ):
         '''Convert the single-ended network to mixed-mode network.'''
         if self.n_port % 2 == 1:
@@ -397,6 +460,19 @@ class NetworkData():
         self._dynamic_load_network_parameter(self.network) #* Reload the network parameters
 
     @property
+    def is_passive(self) -> bool:
+        if self._is_passive is None:
+            self.check_passivity()
+        return self._is_passive
+    
+    @property
+    def passivity_matrix(self):
+        '''Return the passivity matrix whose element is the sum of the power of the reflection coefficient of each port.'''
+        if self._passivity_matrix is None:
+            self.check_passivity()
+        return self._passivity_matrix
+
+    @property
     def passivity_reports(self) -> list[dict]:
         '''
         Return the passivity reports.
@@ -411,19 +487,37 @@ class NetworkData():
 
         passivity_reports: list[dict] = []
         for i in range(self.n_freq):
-            _ith_report: dict = {'index':i, 'freq': str(ExpressionValue(self.f[i], unit='Hz').string), 'nonpassive': []}
+            nonpassive: dict[int, float] = {}
+            passive: dict[int, float] = {}
             for j in range(self.n_port):
                 if passivity_matrix[i, j] > 1:
-                    # passivity_reports += [(i, j, str(ExpressionValue(self.f[i], unit='GHz')), passivity_matrix[i, j])]
-                    _ith_report['nonpassive'] += [(j, passivity_matrix[i, j])]
-            if _ith_report['nonpassive']:
-                passivity_reports += [_ith_report]
+                    nonpassive[j] = passivity_matrix[i, j]
+                else:
+                    passive[j] = passivity_matrix[i, j]
+                    
+            passivity_reports += [{'index':i, 
+                                   'freq': ExpressionValue(self.f[i], unit='Hz').string, 
+                                   'nonpassive': nonpassive, 
+                                   'passive': passive}]
         
         self._passivity_matrix = passivity_matrix
         self._passivity_reports = passivity_reports
-        self._is_passive = not passivity_reports
+        self._is_passive = not (passivity_matrix > 1).any()
 
         return self._is_passive
+    
+    @property
+    def is_causal(self) -> bool:
+        if self._is_causal is None:
+            self.check_causality()
+        return self._is_causal
+    
+    @property
+    def causality_matrix(self) -> np.ndarray:
+        '''Return the causality matrix, where 2 -> causal; 1 -> inconclusive; 0 -> non-causal.'''
+        if self._causality_matrix is None:
+            self.check_causality()
+        return self._causality_matrix
     
     @property
     def causality_reports(self) -> list[dict]:
@@ -445,31 +539,36 @@ class NetworkData():
         truncation_error: np.ndarray = abs(self._truncation_error_network.s[:,0,0])
         discretization_error: np.ndarray = abs(self._discretization_error_network.s)
         
-        causality_matrix: np.ndarray = np.zeros_like(self.network.s, dtype=np.int64)
+        causality_matrix: np.ndarray = np.zeros_like(self.network.s, dtype=np.int64) #: 2 -> causal; 1 -> inconclusive; 0 -> non-causal
         causality_reports: list = []
         for i in range(self.n_freq):
-            _ith_report: dict = {'index':i, 'freq': str(ExpressionValue(self.f[i], unit='Hz').string), 'inconclusive': [],  'noncausal': []}
+            # _ith_report: dict = {'index':i, 'freq': str(ExpressionValue(self.f[i], unit='Hz').string), 'inconclusive': [],  'noncausal': []}
+            inconclusive: dict[tuple[int, int], float] = {}
+            noncausal: dict[tuple[int, int], float] = {}
+            causal: dict[tuple[int, int], float] = {}
             for j in range(self.n_port):
-                second_port_index_range: list = [0, self.n_port-1] if not self.check_reciprocity() else [j, self.n_port-1]
+                second_port_index_range: list = [0, self.n_port] if not self.is_reciprocal else [j, self.n_port]
                 for k in range(*second_port_index_range):
-                    if discretization_error[i,j,k] + truncation_error[i] > causality_tolerance:
-                        causality_matrix[i,j,k] = 1
-                        _ith_report['inconclusive'] += [(j, k)]                    
+                    error_bound = discretization_error[i,j,k] + truncation_error[i]
+                    if error_bound > causality_tolerance:
+                        causality_matrix[i,j,k] = 1  
+                        inconclusive[(j, k)] = causality_tolerance - error_bound
                     elif abs(reconstructed_error[i,j,k]) > causality_tolerance:
                         causality_matrix[i,j,k] = 0
-                        _ith_report['noncausal'] += [(j, k)]
+                        noncausal[(j, k)] = causality_tolerance - abs(reconstructed_error[i,j,k])
                     else:
                         causality_matrix[i,j,k] = 2
-            if _ith_report['inconclusive'] or _ith_report['noncausal']:
-                causality_reports += [_ith_report]
+                        causal[(j, k)] = causality_tolerance - abs(reconstructed_error[i,j,k])
+            causality_reports += [{'index':i, 
+                                   'freq': str(ExpressionValue(self.f[i], unit='Hz').string), 
+                                   'inconclusive': inconclusive, 
+                                   'noncausal': noncausal, 
+                                   'causal': causal}]
         
-        # t2 = time.time() #: End time
-        # print(f'Causality check takes {t2-t1:.2f}sec')
-        
-        
+
         self._causality_matrix = causality_matrix
         self._causality_reports = causality_reports
-        self._is_causal = not causality_reports
+        self._is_causal = not (causality_matrix != 2).any()
         return self._is_causal
     
     def linearly_interpolate(self):
@@ -611,9 +710,13 @@ class NetworkData():
     #     return getattr(self.network, name, None) 
     
 
-
+# t4 = datetime.now()
 
 if '__main__' == __name__:
+    
+    # print(f'Loading takes {t2-t1}')
+    # print(f'Function takes {t3-t2}')
+    # print(f'Objects takes {t4-t3}')
     
     import matplotlib.pyplot as plt
     import time
