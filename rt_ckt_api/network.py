@@ -12,6 +12,7 @@ from datetime import datetime
 import time
 import subprocess
 
+
 from rt_math_api.utility import ExpressionValue, UNIT_TO_VALUE
 from rt_nx_api.eda import CMDThread
 from rt_nx_api.eda import LicenseClient
@@ -22,6 +23,9 @@ import platform
 import threading
 import shutil
 import tempfile
+import warnings
+warnings.filterwarnings("ignore")
+
 
 try:
     import ctypes
@@ -32,6 +36,10 @@ except:
 # t2 = datetime.now()
 
 #%% Math Functions
+
+nb.set_num_threads(os.cpu_count()//2) # type:ignore #: Set half of the CPU count as the numba threads
+
+
 
 # 定義 njit 裝飾的函數
 @nb.njit([nb.complex128(nb.float64, nb.float64), nb.complex128[:](nb.float64[:], nb.float64[:]),])
@@ -95,45 +103,16 @@ def s2y():
 
 
 
-@nb.njit([nb.float64[:, :](nb.complex128[:, :, :]),
-          nb.float64[:, :](nb.complex64[:, :, :]),])
+@nb.njit([nb.float64[:, :](nb.complex128[:, :, :]), nb.float64[:, :](nb.complex64[:, :, :]),],  parallel=True)
 def calculate_passivity_matrix(s_parameter: np.ndarray) -> np.ndarray:
-    r'''
-    Description:
-    ------------
-    Objective:
-        Calculate passitivity matrix whose element is the sum of the power of the reflection coefficient of each port.
-        
-        For fixed frequency, $P_i = \sum_k |s_ik|^2$, where i = 0, 1, ..., n_port-1. 
-    
-    Benchmark:
-        1. Platform
-            CPU Model: Intel(R) Xeon(R) W-3245 CPU @ 3.20GHz
-            CPU Arch: X86_64
-            Memory: 383 GB
-        2. Comparison
-            | Target Size     | `calculate_passivity_matrix` | `rf.passivity`    |  Speedup         |
-            | (440, 4, 4)     |    91.9 µs ± 80.3 ns         | 2.05 ms ± 4.67 µs |  22.3x           |
-            | (360, 103, 103) |  22.3 ms ± 3.13 ms           | 340 ms ± 20.4 ms  |  15.3x           |            
-            
-    Parameters
-    ----------
-    s_parameter : np.ndarray
-        The s-parameter matrix with the shape of (n_freq, n_port, n_port).
-        
-    Returns
-    -------
-    passivity_array : np.ndarray
-        The passivity array with the shape of (n_freq, n_port).
-        
-    '''
+
     assert s_parameter.shape[1] == s_parameter.shape[2], 'The shape of s_parameter must be (n_freq, n_port, n_port).'
     
     passivity_array = np.zeros(s_parameter.shape[:2], dtype=np.float64)
-    for i in range(s_parameter.shape[0]):
-        gram_matrix = s_parameter[i] * s_parameter[i].conj()  #* G_ij = |S_ij|^2
-        for j in range(s_parameter.shape[1]):
-            passivity_array[i, j] = sum(gram_matrix[j, :].real)  #* sum of the row
+    for i in nb.prange(s_parameter.shape[0]):
+        s = s_parameter[i]
+        gram_matrix = s @ s.conj().T
+        passivity_array[i] = np.linalg.eigvals(gram_matrix).real
 
     return passivity_array
 
@@ -282,7 +261,7 @@ class NetworkData():
         # 'z': ['mag', 'db', 'deg', 're', 'im'],
         # 'tdr': [''],
         }
-    SUPPORTED_NETWORK_DATA_PROPERTIES: list[str] = [f'{ntwk_type}_{data_type}' for ntwk_type, data_type_list in SUPPORTED_NETWORK_DATA.items() for data_type in data_type_list]
+    SUPPORTED_NETWORK_DATA_PROPERTIES: list[str] = [f'{ntwk_type}_{data_type}' for ntwk_type, data_type_list in SUPPORTED_NETWORK_DATA.items() for data_type in data_type_list] + list(SUPPORTED_NETWORK_DATA)
     
     N_FITTED = 2000 #* default number of points for vector fitting interpolation
     network: rf.Network
@@ -331,7 +310,6 @@ class NetworkData():
             reference_impedance:int|float = ts.resistance # type:ignore
             frequency_unit = next((unit for unit in UNIT_TO_VALUE if ts.frequency_unit.upper()==unit.upper()), 'GHz')
             
-
             #* Check if `reference_impedance` is wrongly parsed 
             expected_z0 = np.tile(reference_impedance, (n_freq, n_port))  # type:ignore
             if not (ts.z0 == expected_z0).all():
