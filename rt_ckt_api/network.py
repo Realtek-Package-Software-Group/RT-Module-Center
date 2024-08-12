@@ -93,14 +93,9 @@ def generate_step_function(start_time: int|float, end_time: int|float, num_point
     return t, y
 
 
-def s2z():
-    '''To be continued'''
-    pass
+def s2z() -> np.ndarray: ...
 
-def s2y():
-    '''To be continued'''
-    pass
-
+def s2y() -> np.ndarray: ...
 
 
 @nb.njit([nb.float64[:, :](nb.complex128[:, :, :]), nb.float64[:, :](nb.complex64[:, :, :]),],  parallel=True)
