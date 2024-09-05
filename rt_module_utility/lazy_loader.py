@@ -17,7 +17,7 @@ class LazyLoader:
     def module(self):
         if self._module is None:  # 避免重複導入
             try:
-
+                print(self._import_name)
                 self._module = import_module(self._import_name)  # 導入模組 (比如: numpy, PyQt6.QtCore)
 
             except ModuleNotFoundError:  # 導入類/函數/常數等非模組的物件, 會引發這類錯誤 (比如import numpy.array or import math.pi)
@@ -52,6 +52,7 @@ class LazyLoader:
             return self.module
 
     def __getattr__(self, item):
+        
         return getattr(self.member, item)
     
     def __dir__(self):
