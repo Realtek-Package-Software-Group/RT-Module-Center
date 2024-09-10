@@ -455,7 +455,7 @@ class NetworkData():
             self.check_passivity()
         return self._passivity_reports
     
-    def check_passivity(self) -> bool:
+    def check_passivity(self, threshold: float = 0.001) -> bool:
         passivity_matrix = calculate_passivity_matrix(self.network.s)
 
         passivity_reports: list[dict] = []
@@ -463,7 +463,7 @@ class NetworkData():
             nonpassive: dict[int, float] = {}
             passive: dict[int, float] = {}
             for j in range(self.n_port):
-                if passivity_matrix[i, j] > 1:
+                if passivity_matrix[i, j] > 1+threshold:
                     nonpassive[j] = passivity_matrix[i, j]
                 else:
                     passive[j] = passivity_matrix[i, j]
