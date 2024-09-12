@@ -15,25 +15,46 @@ def calculate_rectangular_cross_section_dc_inductance(width, thickness, length, 
     - case 1: width=1um; thickness=20um; length=100um; 
     
       calculate_rectangular_cross_section_dc_inductance(1e-6, 20e-6, 100e-6, 1) -> 55.04 pH
-      Q3D -> 56.56 pH
+      Q3D -> 56.4 pH
+      (Eq-Q3D)/Q3D -> -2.41%
+      (Eq-Q3D) ->   -1.36 pH
     
     
     - case 2: width=5um; thickness=20um; length=100um
     
       calculate_rectangular_cross_section_dc_inductance(5e-6, 20e-6, 100e-6, 1) -> 51.54 pH
-      Q3D -> 53.03 pH
+      Q3D -> 52.94 pH
+      (Eq-Q3D)/Q3D -> -2.644%
+      (Eq-Q3D) ->   -1.4 pH
       
     - case 3: width=10um; thickness=20um; length=100um
     
       calculate_rectangular_cross_section_dc_inductance(10e-6, 20e-6, 100e-6, 1) -> 48 pH
-      Q3D -> 49 nH
+      Q3D -> 49.48 nH
+      (Eq-Q3D)/Q3D -> -3.00%  
+        (Eq-Q3D) ->   -1.48 pH
       
-      
-    - case 3: width=20um; thickness=20um; length=100um
+    - case 4: width=20um; thickness=20um; length=20um
     
-      calculate_rectangular_cross_section_dc_inductance(20e-6, 20e-6, 100e-6, 1) -> 42.2 nH
-      Q3D -> 44 nH
+      calculate_rectangular_cross_section_dc_inductance(20e-6, 20e-6, 20e-6, 1) -> 1.99 pH
+      Q3D -> 3.77 pH    
+      (Eq-Q3D)/Q3D -> 47%  
+      (Eq-Q3D) ->   1.78 pH
+
+    - case 5: width=20um; thickness=20um; length=50um
+    
+      calculate_rectangular_cross_section_dc_inductance(20e-6, 20e-6, 50e-6, 1) -> 14.1 pH
+      Q3D -> 16 pH  
+      (Eq-Q3D)/Q3D -> -12.5%   
+        (Eq-Q3D) ->   -1.9 pH
       
+    - case 6: width=20um; thickness=20um; length=100um
+    
+      calculate_rectangular_cross_section_dc_inductance(20e-6, 20e-6, 100e-6, 1) -> 42.2 pH
+      Q3D -> 44 pH      
+      (Eq-Q3D)/Q3D -> -3.64%   
+        (Eq-Q3D) ->   -1.8 pH
+
     """
     
     assert (width >= 0 and thickness >= 0 and length >= 0), "Width, thickness and length must be positive"
