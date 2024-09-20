@@ -21,10 +21,6 @@ def calculate_rectangular_cross_section_dc_self_inductance(width, thickness, len
     | 5    | w=20um, t=20um, l=50um  | 14.1     | 16       | -12.5            | -1.9          |
     | 6    | w=20um, t=20um, l=100um | 42.2     | 44       | -3.64            | -1.8          |
     
-    
-    calculate_rectangular_cross_section_dc_inductance(10e-6, 20e-6, 100e-6, 1) 
-
-
     """
     
     assert (width >= 0 and thickness >= 0 and length >= 0), "Width, thickness and length must be positive"
@@ -48,7 +44,25 @@ def calculate_rectangular_cross_section_dc_self_inductance(width, thickness, len
     return value
     
 def calculate_rectangular_cross_section_dc_mutual_inductance(width_1, thickness_1, length_1, corner1, width_2, thickness_2, length_2, corner2, distance, mu_r=1):
+    """
+    Reference equation is the one of (5) and (7) in the following paper:
     
+    Z. Piatek, B. Baron, T. Szczegielniak, D. Kusiak and A. Pasierbek, 
+    "Exact closed form formula for mutual inductance of conductors of rectangular cross section", 
+    Przeglad Elektrotechniczny, vol. 89, no. 3a, pp. 61-64, 2013.    
+    
+    Benchmark:
+    
+    | Case | Condition                                                                         | Eq. (pH) | Q3D (pH) |
+    |------|-----------------------------------------------------------------------------------|----------|----------|
+    | 1    | a1=20um; a2=10um; b1=1um; b2=1um; l1=100um; l2=100um; Spacing=75um                | 10.28    | 10.29    |
+    | 2    | a1=20um; a2=10um; b1=1um; b2=1um; l1=100um; l2=150um; Spacing=75um                | 14.58    | 14.58    |
+    | 3    | a1=20um; a2=10um; b1=1um; b2=1um; l1=100um; l2=150um; Spacing=15um                | 31.04    | 31.04    |
+    | 4    | a1=20um; a2=10um; b1=1um; b2=15um; l1=100um; l2=100um; Spacing=15um               | 30.35    | 30.35    |
+    | 5    | a1=20um; a2=10um; b1=1um; b2=15um; l1=50um; l2=100um; Spacing=15um                | 14.15    | 14.15    |
+    | 6    | a1=20um; a2=10um; b1=1um; b2=15um; l1=50um; l2=100um; Spacing=15um; offset_x=30um | 10.88    | 10.88    |
+        
+    """
     def F(x, y, z):
         
         x = round(x, 10)
@@ -131,15 +145,17 @@ def calculate_rectangular_cross_section_dc_mutual_inductance(width_1, thickness_
 if __name__ == "__main__":
     width_1 = 20e-6
     thickness_1 = 1e-6
-    length_1 = 100e-6
+    length_1 = 50e-6
     corner1 = np.array((0,0,0))
     
     
     width_2 = 10e-6
-    thickness_2 = 1e-6
-    length_2 = 100e-6
-    spacing = 75e-6
-    corner2 = np.array((width_1+spacing,0,0))
+    thickness_2 = 15e-6
+    length_2 = 150e-6
+    spacing = 15e-6
+    
+    offset_y = 30e-6
+    corner2 = np.array((width_1+spacing,offset_y,0))
     
     # print(calculate_rectangular_cross_section_dc_self_inductance(width_1, thickness_1, length_1))
     print(calculate_rectangular_cross_section_dc_mutual_inductance(width_1, thickness_1, length_1, corner1, width_2, thickness_2, length_2, corner2, spacing))
