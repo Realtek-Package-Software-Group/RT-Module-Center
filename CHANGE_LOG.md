@@ -1,5 +1,4 @@
-<!--Author:jeff.chou, Host:https://wiki.realtek.com/rest/api, SpaceKey:PKGSW, PageID:539913360, GitHub:https://github.com/Realtek-Package-Software-Group/RT-Math-API/blob/main/CHANGE_LOG.md-->
-
+<!--Author:szuhsien.feng, Host:https://wiki.realtek.com/rest/api, SpaceKey:PKGSW, PageID:608178368, GitHub:https://github.com/Realtek-Package-Software-Group/RT-CKT-API/blob/main/CHANGE_LOG.md-->
 # 2024.08
 
 

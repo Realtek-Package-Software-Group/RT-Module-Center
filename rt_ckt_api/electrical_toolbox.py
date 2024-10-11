@@ -2,7 +2,8 @@
 import math
 import numpy as np
 
-def calculate_rectangular_cross_section_dc_self_inductance(width, thickness, length, mu_r=1):
+def calculate_rectangular_cross_section_dc_self_inductance(width: int|float, thickness: int|float, length: int|float, mu_r:int|float = 1.0) -> int|float:
+
     """
     Reference equation is the one of (24) in the following paper:
     
@@ -43,7 +44,9 @@ def calculate_rectangular_cross_section_dc_self_inductance(width, thickness, len
     
     return value
     
-def calculate_rectangular_cross_section_dc_mutual_inductance(width_1, thickness_1, length_1, corner1, width_2, thickness_2, length_2, corner2, distance, mu_r=1):
+def calculate_rectangular_cross_section_dc_mutual_inductance(width_1: int|float, thickness_1:int|float, length_1: int|float, corner1: np.ndarray|tuple|list, 
+                                                             width_2: int|float, thickness_2:int|float, length_2: int|float, corner2: np.ndarray|tuple|list, 
+                                                             mu_r: float|int = 1.0):
     """
     Reference equation is the one of (5) and (7) in the following paper:
     
@@ -61,7 +64,10 @@ def calculate_rectangular_cross_section_dc_mutual_inductance(width_1, thickness_
     | 4    | a1=20um; a2=10um; b1=1um; b2=15um; l1=100um; l2=100um; Spacing=15um               | 30.35    | 30.35    |
     | 5    | a1=20um; a2=10um; b1=1um; b2=15um; l1=50um; l2=100um; Spacing=15um                | 14.15    | 14.15    |
     | 6    | a1=20um; a2=10um; b1=1um; b2=15um; l1=50um; l2=100um; Spacing=15um; offset_x=30um | 10.88    | 10.88    |
-        
+    
+    Example:
+    
+    
     """
     def F(x, y, z):
         
@@ -143,10 +149,28 @@ def calculate_rectangular_cross_section_dc_mutual_inductance(width_1, thickness_
 
 
 if __name__ == "__main__":
-    width_1 = 20e-6
-    thickness_1 = 1e-6
-    length_1 = 50e-6
+    width_1 = 1810e-6/3
+    thickness_1 = 1.12e-6
+    length_1 = 2210e-6  
     corner1 = np.array((0,0,0))
+    print(calculate_rectangular_cross_section_dc_self_inductance(width_1, thickness_1, length_1))
+    
+    width_1 = 1810e-6
+    thickness_1 = 1.12e-6
+    length_1 = 2210e-6  
+    corner1 = np.array((0,0,0))
+    print(calculate_rectangular_cross_section_dc_self_inductance(width_1, thickness_1, length_1))
+    
+    width_1 = 137e-6
+    thickness_1 = 1.12e-6
+    length_1 = 1430e-6  
+    corner1 = np.array((0,0,0))
+    print(calculate_rectangular_cross_section_dc_self_inductance(width_1, thickness_1, length_1))
+    
+    print(calculate_rectangular_cross_section_dc_self_inductance(102e-6, 1.12e-6, 403e-6) + calculate_rectangular_cross_section_dc_self_inductance(181e-6, 1.12e-6, 881e-6))
+    
+    
+    
     
     
     width_2 = 10e-6
@@ -157,6 +181,6 @@ if __name__ == "__main__":
     offset_y = 30e-6
     corner2 = np.array((width_1+spacing,offset_y,0))
     
-    # print(calculate_rectangular_cross_section_dc_self_inductance(width_1, thickness_1, length_1))
-    print(calculate_rectangular_cross_section_dc_mutual_inductance(width_1, thickness_1, length_1, corner1, width_2, thickness_2, length_2, corner2, spacing))
+    print(calculate_rectangular_cross_section_dc_self_inductance(width_1, thickness_1, length_1))
+    # print(calculate_rectangular_cross_section_dc_mutual_inductance(width_1, thickness_1, length_1, corner1, width_2, thickness_2, length_2, corner2))
     
