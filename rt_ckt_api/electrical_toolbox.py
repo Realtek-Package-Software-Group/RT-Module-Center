@@ -113,6 +113,7 @@ def calculate_rectangular_cross_section_dc_mutual_inductance(width_1: int|float,
     
     value = 0
     for i in range(1, 5):
+        
         if i == 1:
             p = s1-s4
         elif i == 2:
@@ -123,6 +124,7 @@ def calculate_rectangular_cross_section_dc_mutual_inductance(width_1: int|float,
             p = s2-s4        
         
         for j in range(1, 5):
+            
             if j == 1:
                 q = s5-s8
             elif j == 2:
@@ -147,40 +149,188 @@ def calculate_rectangular_cross_section_dc_mutual_inductance(width_1: int|float,
     # assert value >= 0, f"Mutual Inductance must be positive: {value}"
     return factor*value
 
+def calculate_skin_depth(freq: float = 1e9, conductivity: float = 5.8e7, mu_r: float = 1.0) -> float:
+    """
+    Calculate skin depth for a given frequency and conductivity.
+    
+    Args:
+    freq: Frequency in Hz
+    conductivity: Conductivity in S/m
+    mu_r: Relative permeability
+    
+    Returns:
+    Skin depth in meters
+    """
+    
+    mu0 = 4e-7 * math.pi
+    mu = mu_r * mu0
+    skin_depth = (2/(2*math.pi*freq*mu*conductivity))**0.5
+    return skin_depth
+
+#%%
 
 if __name__ == "__main__":
-    width_1 = 1810e-6/3
-    thickness_1 = 1.12e-6
-    length_1 = 2210e-6  
+    width_1 = 200e-6
+    thickness_1 = 15e-6
+    length_1 = 1000e-6
     corner1 = np.array((0,0,0))
-    print(calculate_rectangular_cross_section_dc_self_inductance(width_1, thickness_1, length_1))
     
-    width_1 = 1810e-6
-    thickness_1 = 1.12e-6
-    length_1 = 2210e-6  
-    corner1 = np.array((0,0,0))
-    print(calculate_rectangular_cross_section_dc_self_inductance(width_1, thickness_1, length_1))
-    
-    width_1 = 137e-6
-    thickness_1 = 1.12e-6
-    length_1 = 1430e-6  
-    corner1 = np.array((0,0,0))
-    print(calculate_rectangular_cross_section_dc_self_inductance(width_1, thickness_1, length_1))
-    
-    print(calculate_rectangular_cross_section_dc_self_inductance(102e-6, 1.12e-6, 403e-6) + calculate_rectangular_cross_section_dc_self_inductance(181e-6, 1.12e-6, 881e-6))
-    
-    
-    
-    
-    
-    width_2 = 10e-6
+    width_2 = 100e-6
     thickness_2 = 15e-6
-    length_2 = 150e-6
-    spacing = 15e-6
+    length_2 = 1000e-6
+    spacing = 100e-6
+    corner2 = corner1 + np.array((width_1+spacing,0,0))
     
-    offset_y = 30e-6
-    corner2 = np.array((width_1+spacing,offset_y,0))
+    #* Test Case: 
+    #*  Two condcutors are given, one need to saparate each of them into several parts (width is divieded by N, and thickness is divided by M)
+    #*  Now, calculate all mutual inductance and self inductance of each segments. Noted that the original belonging is needed to be considered.
+    #*  The final result is the total inductance matrix of all segments
+    
+    N = 2
+    M = 2
+    conductivity = 5.8e7
+    freq = 1e9
+    
+    each_segments: dict[int, dict[str, float|int|np.ndarray]] = {}
+    
+    #* Conductor 1
+    for i in range(N):
+        for j in range(M):
+            
+            id = i*M + j
+            width = width_1/N
+            thickness = thickness_1/M
+            length = length_1
+            corner = corner1 + np.array((i*width, j*thickness, 0))
+            
+            each_segments[i*M + j] = {
+                # 'id': id,
+                'parent_id': 0, 
+                'corner': corner,
+                'width': width,
+                'thickness': thickness,
+                'length': length,
+                }
+            
+    
+    #* Conductors 2
+    for i in range(N):
+        for j in range(M):
+            
+            id = i*M + j + N*M
+            width = width_2/N
+            thickness = thickness_2/M
+            length = length_2
+            corner = corner2 + np.array((i*width, j*thickness, 0))
+            
+            each_segments[i*M + j + N*M] = {
+                # 'id': id,
+                'parent_id': 1, 
+                'corner': corner,
+                'width': width,
+                'thickness': thickness,
+                'length': length,
+                }
+    
+    
+    #* Total impedance matrix 
+    impedance_matrix = np.zeros((2*N*M, 2*N*M), dtype=np.complex128)
+    for i in range(2):
+        for j in range(2):
+            #* sub impedance matrix
+            i_range = range(N*M) if i == 0 else range(N*M, 2*N*M)
+            j_range = range(N*M) if j == 0 else range(N*M, 2*N*M)
+            
+            for k in i_range:
+                for l in j_range:
+                    width_1  = each_segments[k]['width']
+                    thickness_1 = each_segments[k]['thickness']
+                    length_1 = each_segments[k]['length']
+                    corner1 = each_segments[k]['corner']
+                    
+                    width_2 = each_segments[l]['width']
+                    thickness_2 = each_segments[l]['thickness']
+                    length_2 = each_segments[l]['length']
+                    corner2 = each_segments[l]['corner']
+                    
+                    
+                    # impedance_matrix[k, l] = 1
+                    # continue
+                    if i == j:
+                        if k==l:
+                            resistance = length_1/ (width_1*thickness_1*conductivity)
+                            inductance = calculate_rectangular_cross_section_dc_self_inductance(width_1, thickness_1, length_1)
+                            impedance_matrix[k, l] = resistance + 1j*2*math.pi*freq*inductance
+                        else:
+                            resistance = 0
+                            inductance = calculate_rectangular_cross_section_dc_mutual_inductance(width_1, thickness_1, length_1, corner1, width_2, thickness_2, length_2, corner2)
+                            impedance_matrix[k, l] = 1j*2*math.pi*freq*inductance
+                    else:
+                        resistance = 0
+                        inductance = calculate_rectangular_cross_section_dc_mutual_inductance(width_1, thickness_1, length_1, corner1, width_2, thickness_2, length_2, corner2)
+                        impedance_matrix[k, l] = 1j*2*math.pi*freq*inductance
+                        
+
+                    
+    
+    
+    final_addmittance_matrix = np.zeros((2, 2), dtype=np.complex128)
+    for i in range(2):
+        for j in range(2):
+            i_range = slice(0, N*M) if i == 0 else slice(N*M, 2*N*M)
+            j_range = slice(0, N*M) if j == 0 else slice(N*M, 2*N*M)
+            final_addmittance_matrix[i, j] = np.sum(np.linalg.inv(impedance_matrix[i_range, j_range]))
+            
+            if i!=j:
+                print(final_addmittance_matrix[i, j].imag/2/math.pi/freq)
+                # final_addmittance_matrix[i, j] = -final_addmittance_matrix[i, j]
+            # final_addmittance_matrix[i, j] = np.sum(np.linalg.inv(impedance_matrix[i, j]))
+
+    final_impedance_matrix = np.linalg.inv(final_addmittance_matrix)
+    print(final_impedance_matrix.imag/2/math.pi/freq)
+
+    
+
+#%%
+
+if __name__ == "__main__":
+    # width_1 = 1810e-6/3
+    # thickness_1 = 1.12e-6
+    # length_1 = 2210e-6  
+    # corner1 = np.array((0,0,0))
+    # print(calculate_rectangular_cross_section_dc_self_inductance(width_1, thickness_1, length_1))
+    
+    # width_1 = 1810e-6
+    # thickness_1 = 1.12e-6
+    # length_1 = 2210e-6  
+    # corner1 = np.array((0,0,0))
+    # print(calculate_rectangular_cross_section_dc_self_inductance(width_1, thickness_1, length_1))
+    
+    # width_1 = 137e-6
+    # thickness_1 = 1.12e-6
+    # length_1 = 1430e-6  
+    # corner1 = np.array((0,0,0))
+    # print(calculate_rectangular_cross_section_dc_self_inductance(width_1, thickness_1, length_1))
+    
+    # print(calculate_rectangular_cross_section_dc_self_inductance(102e-6, 1.12e-6, 403e-6) + calculate_rectangular_cross_section_dc_self_inductance(181e-6, 1.12e-6, 881e-6))
+    
+    
+    
+    
+    width_1 = 200e-6
+    thickness_1 = 15e-6
+    length_1 = 1000e-6
+    corner1 = np.array((0,0,0))
+    
+    width_2 = 100e-6
+    thickness_2 = 15e-6
+    length_2 = 1000e-6
+    spacing = 100e-6
+    corner2 = corner1 + np.array((width_1+spacing,0,0))
+    
+#     offset_y = 30e-6
+#     corner2 = np.array((width_1+spacing,offset_y,0))
     
     print(calculate_rectangular_cross_section_dc_self_inductance(width_1, thickness_1, length_1))
-    # print(calculate_rectangular_cross_section_dc_mutual_inductance(width_1, thickness_1, length_1, corner1, width_2, thickness_2, length_2, corner2))
+    print(calculate_rectangular_cross_section_dc_mutual_inductance(width_1, thickness_1, length_1, corner1, width_2, thickness_2, length_2, corner2))
     
