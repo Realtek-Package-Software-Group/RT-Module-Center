@@ -56,7 +56,7 @@ class NamedTuple:
 
 class AutoDict:
     """
-    一個可以靈活切換 dict 和 list 的自動結構。
+    這是一個可以自動生成多階 dict/list的資料結構
     """
 
     def __init__(self):
@@ -104,17 +104,19 @@ class AutoDict:
 
 if __name__ == '__main__':
     
-    # a = NamedTuple(x=1, y=2)
+    # NamedTuple Demo
+    a = NamedTuple(x=1, y=2)
     
-    # print('屬性取值', a.x, a.y)
+    print('屬性取值', a.x, a.y)
     
-    # x, y = a
-    # print('unpack', x, y)
+    x, y = a
+    print('unpack', x, y)
     
-    # print('index取值', a[0], a[1])
+    print('index取值', a[0], a[1])
     
-    # print(a)
+    print(a)
     
+    # AutoDict Demo
     a = AutoDict()
     a['L1']['L2'] = '12'
     a['L3'].append('3')
