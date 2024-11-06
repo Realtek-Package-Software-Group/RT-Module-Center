@@ -67,7 +67,7 @@ class NamedTuple:
 
         return hash(tuple((attr, getattr(self, attr)) for attr in self._attributes))
     
-    def __bool__(self):
+    def __bool__(self):  # 用於快速判斷是否為空
         
         if self._attributes:
             return True
