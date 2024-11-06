@@ -53,6 +53,29 @@ class NamedTuple:
         else:
             raise TypeError(f"'<' not supported between instances of '{self.__class__.__name__}' and '{other.__class__.__name__}'")
 
+    def __eq__(self, other):  # for == 和 in 檢查
+        
+        if other.__class__ == self.__class__ and other._attributes == self._attributes:  # 考慮屬性名稱差異
+            
+            return all(getattr(self, attr) == getattr(other, attr) for attr in self._attributes)
+
+        else:
+            return False
+        
+        
+    def __hash__(self):  # for set 和 dict-key 使用 (考慮屬性名稱差異)
+
+        return hash(tuple((attr, getattr(self, attr)) for attr in self._attributes))
+    
+    def __bool__(self):
+        
+        if self._attributes:
+            return True
+        else:
+            return False
+            
+        
+    
 
 class AutoDict:
     """
@@ -64,13 +87,13 @@ class AutoDict:
 
     def __getitem__(self, key):
 
-        if isinstance(self.data, dict):
+        if self.data.__class__ == dict:
             
             if key not in self.data:
                 self.data[key] = self.__class__()  # 自動產生dict
             return self.data[key]
         
-        elif isinstance(self.data, list):
+        elif self.data.__class__ == list:
             
             if key.__class__ != int:
                 raise TypeError("Index must be an integer")
@@ -86,7 +109,7 @@ class AutoDict:
 
     def __getattr__(self, name):
 
-        if name == 'append' and isinstance(self.data, dict):
+        if name == 'append' and self.data.__class__ == dict:
             
             if self.data:  # with existed value
                 raise AttributeError(f"Can not use '{name}' method with non-empty dict: {self.data}")
@@ -134,3 +157,13 @@ if __name__ == '__main__':
     print(b)
     b = sorted(b)
     print(b)
+    
+    print(NamedTuple(x=3, y=2) in b)
+    print(NamedTuple(z=3, y=2) in b)
+    c = dict()
+    c[NamedTuple(x=3, y=2)] = '222'
+    print(c)
+    
+    d = NamedTuple()
+    if d:
+        print('get tuple')
