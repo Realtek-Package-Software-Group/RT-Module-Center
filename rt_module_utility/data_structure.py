@@ -3,6 +3,7 @@ from collections import defaultdict
 class NamedTuple:
     """
     這是一個物件導向實現的Tuple結構, 支援傳統的tuple操作, 也可以直接用屬性名稱來獲取值
+    可以顯著提高程式碼可讀性
     """
     
     _hash = None
@@ -59,15 +60,16 @@ class NamedTuple:
     def __eq__(self, other):  # for == 和 in 檢查
         
         if self.__class__ == other.__class__:
-            return self.__hash__ == other.__hash__
+            return hash(self) == hash(other)
         else:
             return False
         
-    def __hash__(self):  # for set 和 dict-key 使用 (考慮屬性名稱差異)
-        
+    def __hash__(self):  # 影響hash()函數的結果, for set 和 dict-key 使用 (考慮屬性名稱差異)
+
         if self._hash is None:  # 因為tuple本質為不可變, hash計算一次即可
-            self._hash = hash(tuple((attr, getattr(self, attr)) for attr in self._attributes))  # 考慮屬性名稱差異
             
+            super().__setattr__('_hash', hash(tuple((attr, getattr(self, attr)) for attr in self._attributes)) )  # 考慮屬性名稱差異
+     
         return self._hash
     
     def __bool__(self):  # 用於快速判斷是否為空
@@ -150,41 +152,53 @@ if __name__ == '__main__':
     
     # NamedTuple Demo
     a = NamedTuple(x=1, y=2)
+    print(a)  # NamedTuple(x=1, y=2)
     
     print('屬性取值', a.x, a.y)
     
     x, y = a
     print('unpack', x, y)
     
+    for i, v in enumerate(a):
+        print(i, v)
+    
     print('index取值', a[0], a[1])
     
-    print(a)
+    print(f'len={len(a)}')
+    
+    t_list = [NamedTuple(x=3, y=2), NamedTuple(x=2, y=2), NamedTuple(x=1, y=2)]
+    print('Before Sorted', t_list)
+    t_list = sorted(t_list)
+    print('After Sorted', t_list)
+    
+    print('in', a in t_list)
+    print('==', a == t_list[0])
     
     # AutoDict Demo
-    a = AutoDict()
-    a['L1']['L2'] = '12'
-    a['L3'].append('3')
-    a['L3'].append('4')
+    # a = AutoDict()
+    # a['L1']['L2'] = '12'
+    # a['L3'].append('3')
+    # a['L3'].append('4')
 
-    print(a)
-    print(a['L3'][0], a['L3'][1])
-    a['L3'].extend(['5', '6'])
-    print(a['L3'])
+    # print(a)
+    # print(a['L3'][0], a['L3'][1])
+    # a['L3'].extend(['5', '6'])
+    # print(a['L3'])
     
-    a['L1'].update({'L22': '33'})
-    print(a)
+    # a['L1'].update({'L22': '33'})
+    # print(a)
 
-    b = [NamedTuple(x=3, y=2), NamedTuple(x=2, y=3)]
-    print(b)
-    b = sorted(b)
-    print(b)
+    # b = [NamedTuple(x=3, y=2), NamedTuple(x=2, y=3)]
+    # print(b)
+    # b = sorted(b)
+    # print(b)
     
-    print(NamedTuple(x=3, y=2) in b)
-    print(NamedTuple(z=3, y=2) in b)
-    c = dict()
-    c[NamedTuple(x=3, y=2)] = '222'
-    print(c)
+    # print(NamedTuple(x=3, y=2) in b)
+    # print(NamedTuple(z=3, y=2) in b)
+    # c = dict()
+    # c[NamedTuple(x=3, y=2)] = '222'
+    # print(c)
     
-    d = NamedTuple()
-    if d:
-        print('get tuple')
+    # d = NamedTuple()
+    # if d:
+    #     print('get tuple')
