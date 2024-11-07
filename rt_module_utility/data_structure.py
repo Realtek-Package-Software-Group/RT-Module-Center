@@ -85,6 +85,8 @@ class AutoDict:
     這是一個可以自動生成多階 dict/list的資料結構
     """
 
+    __hash__ = None  # disable hash (as same as the regular dict)
+    
     def __init__(self):
         self.data = {}  # internal-data-structure (can be dict or list)
 
