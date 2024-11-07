@@ -4,6 +4,9 @@ class NamedTuple:
     """
     這是一個物件導向實現的Tuple結構, 支援傳統的tuple操作, 也可以直接用屬性名稱來獲取值
     """
+    
+    _hash = None
+    
     def __init__(self, *args, **kwargs):  # we can only use keyword to assign item
         
         if args:
@@ -55,16 +58,17 @@ class NamedTuple:
 
     def __eq__(self, other):  # for == 和 in 檢查
         
-        if other.__class__ == self.__class__ and other._attributes == self._attributes:  # 考慮屬性名稱差異
-            
-            return all(getattr(self, attr) == getattr(other, attr) for attr in self._attributes)
-
+        if self.__class__ == other.__class__:
+            return self.__hash__ == other.__hash__
         else:
             return False
         
     def __hash__(self):  # for set 和 dict-key 使用 (考慮屬性名稱差異)
-
-        return hash(tuple((attr, getattr(self, attr)) for attr in self._attributes))
+        
+        if self._hash is None:  # 因為tuple本質為不可變, hash計算一次即可
+            self._hash = hash(tuple((attr, getattr(self, attr)) for attr in self._attributes))  # 考慮屬性名稱差異
+            
+        return self._hash
     
     def __bool__(self):  # 用於快速判斷是否為空
         
@@ -122,6 +126,22 @@ class AutoDict:
 
     def __repr__(self):
         return repr(self.data)
+    
+    def __eq__(self, other):  # for == 和 in 檢查
+        
+        # dict屬於可變結構 (unhashable), 不能用__hash__來比較
+        if self.__class__ == other.__class__:
+            return self.data == other.data
+        else:
+            return self.data == other
+            
+    def __bool__(self):  # 用於快速判斷是否為空
+        
+        if self.data:
+            return True
+        else:
+            return False
+            
 
 
 if __name__ == '__main__':
