@@ -62,7 +62,6 @@ class NamedTuple:
         else:
             return False
         
-        
     def __hash__(self):  # for set 和 dict-key 使用 (考慮屬性名稱差異)
 
         return hash(tuple((attr, getattr(self, attr)) for attr in self._attributes))
@@ -109,7 +108,7 @@ class AutoDict:
 
     def __getattr__(self, name):
 
-        if name == 'append' and self.data.__class__ == dict:
+        if name in ('append', 'extend') and self.data.__class__ == dict:
             
             if self.data:  # with existed value
                 raise AttributeError(f"Can not use '{name}' method with non-empty dict: {self.data}")
