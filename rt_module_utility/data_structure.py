@@ -80,8 +80,6 @@ class NamedTuple:
             return False
             
         
-    
-
 class AutoDict:
     """
     這是一個可以自動生成多階 dict/list的資料結構
@@ -111,7 +109,7 @@ class AutoDict:
                 raise IndexError("Index out of range")
         
     def __setitem__(self, key, value):
-        
+
         self.data[key] = value
 
     def __getattr__(self, name):
@@ -145,60 +143,81 @@ class AutoDict:
             return True
         else:
             return False
-            
+        
+    def __contains__(self, key):  # check key是否已在dict中
 
+        return key in self.data
+    
+    def __len__(self):
+        
+        return len(self.data)
+    
+
+            
 
 if __name__ == '__main__':
     
     # NamedTuple Demo
-    a = NamedTuple(x=1, y=2)
-    print(a)  # NamedTuple(x=1, y=2)
+    # a = NamedTuple(x=1, y=2)
+    # print(a)  # NamedTuple(x=1, y=2)
     
-    print('屬性取值', a.x, a.y)
+    # print('屬性取值', a.x, a.y)  # >> 屬性取值 1 2
     
-    x, y = a
-    print('unpack', x, y)
+    # x, y = a
+    # print('unpack', x, y)  # >> unpack 1 2
     
-    for i, v in enumerate(a):
-        print(i, v)
+    # for i, v in enumerate(a):  # >> 0 1
+    #     print(i, v)            # >> 1 2
     
-    print('index取值', a[0], a[1])
+    # print('index取值', a[0], a[1])  # >> index取值 1 2
     
-    print(f'len={len(a)}')
+    # print(f'len={len(a)}')  # >> len=2
     
-    t_list = [NamedTuple(x=3, y=2), NamedTuple(x=2, y=2), NamedTuple(x=1, y=2)]
-    print('Before Sorted', t_list)
-    t_list = sorted(t_list)
-    print('After Sorted', t_list)
+    # t_list = [NamedTuple(x=3, y=2), NamedTuple(x=2, y=2), NamedTuple(x=1, y=2)]
+    # print('Before Sorted', t_list)  # >> Before Sorted [NamedTuple(x=3, y=2), NamedTuple(x=2, y=2), NamedTuple(x=1, y=2)]
+    # t_list = sorted(t_list)
+    # print('After Sorted', t_list)  # >> After Sorted [NamedTuple(x=1, y=2), NamedTuple(x=2, y=2), NamedTuple(x=3, y=2)]
     
-    print('in', a in t_list)
-    print('==', a == t_list[0])
+    # print('in', a in t_list)  # >> in True
+    # print('==', a == t_list[0])  # >> == True
     
     # AutoDict Demo
-    # a = AutoDict()
-    # a['L1']['L2'] = '12'
-    # a['L3'].append('3')
-    # a['L3'].append('4')
+    a = AutoDict()
 
-    # print(a)
-    # print(a['L3'][0], a['L3'][1])
-    # a['L3'].extend(['5', '6'])
-    # print(a['L3'])
-    
-    # a['L1'].update({'L22': '33'})
-    # print(a)
+    a['L1']['L2'] = '12'
+    a['L3'].append('3')
+    a['L3'].append('4')
 
-    # b = [NamedTuple(x=3, y=2), NamedTuple(x=2, y=3)]
-    # print(b)
-    # b = sorted(b)
-    # print(b)
+    print(a)  # >> {'L1': {'L2': '12'}, 'L3': ['3', '4']}
+    print(a['L3'][0], a['L3'][1])  # >> 3 4
+    a['L3'].extend(['5', '6'])
+    print(a['L3'])  # >> ['3', '4', '5', '6']
     
-    # print(NamedTuple(x=3, y=2) in b)
-    # print(NamedTuple(z=3, y=2) in b)
-    # c = dict()
-    # c[NamedTuple(x=3, y=2)] = '222'
-    # print(c)
+    a['L1'].update({'L22': '33'})
+    print(a)  # >> {'L1': {'L2': '12', 'L22': '33'}, 'L3': ['3', '4', '5', '6']}
+
+    b = AutoDict()
+    if not b:  
+        print('Hello World')  # >> Hello World
+
+    b['1'] = '2'
+    b['2'].append('3')
+    if b:
+        print('Hello World')  # >> Hello World
+        
+    c = AutoDict()
+    c['1'] = '2'
+    c['2'].append('3')
+    print(b == c)  # >> True
     
-    # d = NamedTuple()
-    # if d:
-    #     print('get tuple')
+    c['2'] = '3'
+    print(b == c)  # >> False
+    print('2' in c)  # >> True
+    print('A' in c)  # >> False
+    
+    b['2'].append('33')
+    print(b)
+    print(len(b), len(b['2']))
+
+    
+    
