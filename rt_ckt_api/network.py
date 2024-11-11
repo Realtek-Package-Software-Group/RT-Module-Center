@@ -363,12 +363,32 @@ class NetworkData():
     
     @property
     def reciprocity_reports(self) -> list[dict]:
+        '''
+        Return the reciprocity reports.
+        Item-dictionary: {'index': frequency index, 'freq': frequency string, 'reciprocal': [(port index, port index), ...], 'nonreciprocal': [(port index, port index), ...], 'almost': [(port index, port index), ...]}
+        '''
+        
         if self._reciprocity_reports is None:
             self.check_reciprocity()
         return self._reciprocity_reports
     
     def check_reciprocity(self, abs_error: float = 1e-9, rel_error_min: float = 0, rel_error_max: float = 0.05) -> bool:
-        '''Check if the network is reciprocal or not.'''
+        '''
+        Check if the network is reciprocal or not.
+        
+        Parameters
+        ----------
+        abs_error : float, optional
+            Absolute error tolerance to judge the reciprocity. The default is 1e-9.
+        rel_error_min : float, optional
+            Minimum relative error tolerance to judge the reciprocity. The default is 0.
+        rel_error_max : float, optional
+            Maximum relative error tolerance to judge the reciprocity. The default is 0.05.
+            
+        Returns
+        -------
+        bool
+        '''
         if self._is_reciprocal is None:
             # self._is_reciprocal = self.network.is_reciprocal()
             reciprocity_matrix: np.ndarray = np.zeros_like(self.network.s, dtype=np.int64) #: 2 -> reciprocal; 1 -> almost; 0 -> non-reciprocal
@@ -405,7 +425,7 @@ class NetworkData():
             #* If zero in reciprocity_matrix, give False to _is_reciprocal
             self._reciprocity_matrix = reciprocity_matrix
             self._reciprocity_reports = reciprocity_reports
-            self._is_reciprocal = (reciprocity_matrix != 0).all()
+            self._is_reciprocal = not any(report['nonreciprocal'] for report in reciprocity_reports)
 
         return self._is_reciprocal
     
@@ -449,7 +469,7 @@ class NetworkData():
     def passivity_reports(self) -> list[dict]:
         '''
         Return the passivity reports.
-        Item-Dictionary: {'index':frequecny index, 'freq': frequency string, 'nonpassive': [(port index, power summation), ...]}
+        Item-dictionary: {'index': frequency index, 'freq': frequency string, 'nonpassive': [(port index, passivity), ...], 'passive': [(port index, passivity), ...]}
         '''
         if self._passivity_reports is None:
             self.check_passivity()
@@ -475,7 +495,7 @@ class NetworkData():
         
         self._passivity_matrix = passivity_matrix
         self._passivity_reports = passivity_reports
-        self._is_passive = not (passivity_matrix > 1).any()
+        self._is_passive = not any(report['nonpassive'] for report in passivity_reports)
 
         return self._is_passive
     
@@ -532,6 +552,7 @@ class NetworkData():
                     else:
                         causality_matrix[i,j,k] = 2
                         causal[(j, k)] = causality_tolerance - abs(reconstructed_error[i,j,k])
+                        
             causality_reports += [{'index':i, 
                                    'freq': str(ExpressionValue(self.f[i], unit='Hz').string), 
                                    'inconclusive': inconclusive, 
@@ -541,7 +562,12 @@ class NetworkData():
 
         self._causality_matrix = causality_matrix
         self._causality_reports = causality_reports
-        self._is_causal = not (causality_matrix != 2).any()
+        
+        [rpt['freq'] for rpt in causality_reports]
+        
+        is_noncausal = any(report['noncausal'] for report in causality_reports)
+        is_inconclusive = any(report['inconclusive'] for report in causality_reports)
+        self._is_causal = not is_noncausal and not is_inconclusive
         return self._is_causal
     
     def linearly_interpolate(self):
