@@ -1,30 +1,25 @@
-from datetime import datetime
-# t1 = datetime.now()
-
-
-import numpy as np
-import skrf as rf
-import numba as nb
-import numpy as np
-from typing import Optional, Callable, Any, Sequence
-from pathlib import Path
-from datetime import datetime
-import time
-import subprocess
-
-
-from rt_math_api.utility import ExpressionValue, UNIT_TO_VALUE
-from rt_nx_api.eda import CMDThread
-from rt_nx_api.eda import LicenseClient
-
-import re
 import os
 import platform
-import threading
+import re
 import shutil
+import subprocess
 import tempfile
+import threading
 import warnings
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Callable, Optional, Sequence
+
+import numpy as np
+import numba as nb
+import skrf as rf
+
+from rt_math_api.utility import ExpressionValue, UNIT_TO_VALUE
+from rt_nx_api.eda import CMDThread, LicenseClient
+
+# 忽略警告
 warnings.filterwarnings("ignore")
+
 
 
 try:
@@ -35,85 +30,7 @@ except:
 
 # t2 = datetime.now()
 
-#%% Math Functions
-
-nb.set_num_threads(os.cpu_count()//2) # type:ignore #: Set half of the CPU count as the numba threads
-
-
-
-# 定義 njit 裝飾的函數
-@nb.njit([nb.complex128(nb.float64, nb.float64), nb.complex128[:](nb.float64[:], nb.float64[:]),])
-def ma2cmplx(mag: float|np.ndarray, ang: float|np.ndarray) -> complex|np.ndarray:
-    real = mag * np.cos(np.deg2rad(ang))
-    imag = mag * np.sin(np.deg2rad(ang))
-    return real+1j*imag
-
-@nb.njit([nb.complex128(nb.float64, nb.float64), nb.complex128[:](nb.float64[:], nb.float64[:]),])
-def db2cmplx(db: float|np.ndarray, ang: float|np.ndarray) -> complex|np.ndarray:
-    mag = 10**(db/20)
-    real = mag * np.cos(np.deg2rad(ang))
-    imag = mag * np.sin(np.deg2rad(ang))
-    return real+1j*imag
-
-@nb.njit([nb.complex128(nb.float64, nb.float64), nb.complex128[:](nb.float64[:], nb.float64[:]),])
-def ri2cmplx(real: float|np.ndarray, imag: float|np.ndarray) -> complex|np.ndarray:
-    return real + 1j*imag
-
-@nb.njit(nb.types.Tuple((nb.float64[:], nb.float64[:]))(nb.float64, nb.float64, nb.int64, nb.float64, nb.float64))
-def generate_step_function(start_time: int|float, end_time: int|float, num_points: int, rise_time: float = 50e-12, delay: float = 1e-9):
-    """
-    Generate a step function with specified rise time and delay.
-
-    Parameters
-    ----------
-    start_time : float
-        Start time of the step function.
-    end_time : float
-        End time of the step function.  
-    num_points : int
-        Number of points in the step function.
-    rise_time : float, optional
-        Rise time of the step function. The default is 50e-12.
-    delay : float, optional
-        Delay of the step function. The default is 1e-9.
-        
-    Returns
-    -------
-    t : np.ndarray
-        Time vector.
-    y : np.ndarray
-        Step function.  
-    """
-    t = np.linspace(start_time, end_time, num_points)
-    y = np.empty_like(t)
-    
-    for i in range(num_points):
-        y[i] = min(max((t[i] - delay) / rise_time, 0), 1)
-    
-    return t, y
-
-
-def s2z() -> np.ndarray: ...
-
-def s2y() -> np.ndarray: ...
-
-
-@nb.njit([nb.float64[:, :](nb.complex128[:, :, :]), nb.float64[:, :](nb.complex64[:, :, :]),],  parallel=True)
-def calculate_passivity_matrix(s_parameter: np.ndarray) -> np.ndarray:
-
-    assert s_parameter.shape[1] == s_parameter.shape[2], 'The shape of s_parameter must be (n_freq, n_port, n_port).'
-    
-    passivity_array = np.zeros(s_parameter.shape[:2], dtype=np.float64)
-    for i in nb.prange(s_parameter.shape[0]):
-        s = s_parameter[i]
-        gram_matrix = s @ s.conj().T
-        passivity_array[i] = np.linalg.eigvals(gram_matrix).real
-
-    return passivity_array
-
-
-
-#%% Other Functions
+# %% Other Functions
 
 
 def get_ansys_newest_version() -> tuple[str, str]:
@@ -243,10 +160,87 @@ def check_causality_by_genequiv(touchstone_filepath: str, causality_tolerance: f
     
     return causality_infomation
     
+
+# %% Math Functions
+
+nb.set_num_threads(os.cpu_count()//2) # type:ignore #: Set half of the CPU count as the numba threads
+
+# 定義 njit 裝飾的函數
+@nb.njit([nb.complex128(nb.float64, nb.float64), nb.complex128[:](nb.float64[:], nb.float64[:]),])
+def ma2cmplx(mag: float|np.ndarray, ang: float|np.ndarray) -> complex|np.ndarray:
+    real = mag * np.cos(np.deg2rad(ang))
+    imag = mag * np.sin(np.deg2rad(ang))
+    return real+1j*imag
+
+@nb.njit([nb.complex128(nb.float64, nb.float64), nb.complex128[:](nb.float64[:], nb.float64[:]),])
+def db2cmplx(db: float|np.ndarray, ang: float|np.ndarray) -> complex|np.ndarray:
+    mag = 10**(db/20)
+    real = mag * np.cos(np.deg2rad(ang))
+    imag = mag * np.sin(np.deg2rad(ang))
+    return real+1j*imag
+
+@nb.njit([nb.complex128(nb.float64, nb.float64), nb.complex128[:](nb.float64[:], nb.float64[:]),])
+def ri2cmplx(real: float|np.ndarray, imag: float|np.ndarray) -> complex|np.ndarray:
+    return real + 1j*imag
+
+@nb.njit(nb.types.Tuple((nb.float64[:], nb.float64[:]))(nb.float64, nb.float64, nb.int64, nb.float64, nb.float64))
+def generate_step_function(start_time: int|float, end_time: int|float, num_points: int, rise_time: float = 50e-12, delay: float = 1e-9):
+    """
+    Generate a step function with specified rise time and delay.
+
+    Parameters
+    ----------
+    start_time : float
+        Start time of the step function.
+    end_time : float
+        End time of the step function.  
+    num_points : int
+        Number of points in the step function.
+    rise_time : float, optional
+        Rise time of the step function. The default is 50e-12.
+    delay : float, optional
+        Delay of the step function. The default is 1e-9.
+        
+    Returns
+    -------
+    t : np.ndarray
+        Time vector.
+    y : np.ndarray
+        Step function.  
+    """
+    t = np.linspace(start_time, end_time, num_points)
+    y = np.empty_like(t)
     
+    for i in range(num_points):
+        y[i] = min(max((t[i] - delay) / rise_time, 0), 1)
+    
+    return t, y
+
+
+def s2z() -> np.ndarray: ...
+
+def s2y() -> np.ndarray: ...
+
+
+@nb.njit([nb.float64[:, :](nb.complex128[:, :, :]), nb.float64[:, :](nb.complex64[:, :, :]),],  parallel=True)
+def calculate_passivity_matrix(s_parameter: np.ndarray) -> np.ndarray:
+
+    assert s_parameter.shape[1] == s_parameter.shape[2], 'The shape of s_parameter must be (n_freq, n_port, n_port).'
+    
+    passivity_array = np.zeros(s_parameter.shape[:2], dtype=np.float64)
+    for i in nb.prange(s_parameter.shape[0]):
+        s = s_parameter[i]
+        gram_matrix = s @ s.conj().T
+        passivity_array[i] = np.linalg.eigvals(gram_matrix).real
+
+    return passivity_array
+
+
+
+
 # t3 = datetime.now()
 
-#%% Objects
+# %% Objects
 class NetworkData():
     
     #* Default parameters
