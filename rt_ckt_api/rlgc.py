@@ -67,14 +67,70 @@ def float_at_infinity(matrix_type: str, matrix: np.ndarray) -> np.ndarray:
     return new_matrix
 
 
+def float_net(matrix_type: str, matrix: np.ndarray, floating_index: int) -> np.ndarray:
+    
+    if matrix_type.lower() not in ['r', 'l', 'g', 'c']:
+        raise ValueError('Invalid matrix type')
+    
+    dim = matrix.shape[0]
+    if not -dim <= floating_index < dim:
+        raise ValueError('Invalid floating index')
+    
+    floating_index = floating_index % dim
+    new_matrix = np.zeros((dim-1, dim-1))
+
+    if matrix_type.lower() in ['r', 'l']:
+
+        for i in range(dim):
+            
+            new_i = i if i < floating_index else i-1
+            if i == floating_index:
+                continue
+            
+            for j in range(dim):
+                
+                new_j = j if j < floating_index else j-1
+                if j == floating_index:
+                    continue
+                
+                new_matrix[new_i, new_j] = matrix[i,j]
+        
+    else: #* C G
+        '''To the floating net and the ground net, sequentially.'''        
+        for i in range(dim):
+            
+            new_i = i if i < floating_index else i-1
+            if i == floating_index:
+                continue
+            
+            for j in range(dim):
+                
+                new_j = j if j < floating_index else j-1
+                if j == floating_index:
+                    continue
+                
+                c_ij = matrix[i, j]
+                c_ik = matrix[i, floating_index]
+                c_kj = matrix[floating_index, j]
+                c_kk = matrix[floating_index, floating_index]
+                
+                new_matrix[new_i, new_j] = c_ij - c_ik*c_kj/c_kk
+    
+    return new_matrix
+
+
 def ground_net(matrix_type: str, matrix: np.ndarray, grounded_index: int) -> np.ndarray:
     
     if matrix_type.lower() not in ['r', 'l', 'g', 'c']:
         raise ValueError('Invalid matrix type')
     
     dim = matrix.shape[0]
-    shape = matrix.shape
+    if not -dim <= grounded_index < dim:
+        raise ValueError('Invalid floating index')
+    
+    floating_index = grounded_index % dim
     new_matrix = np.zeros((dim-1, dim-1))
+
 
     if matrix_type.lower() in ['r', 'l']:
 
@@ -117,7 +173,6 @@ def ground_net(matrix_type: str, matrix: np.ndarray, grounded_index: int) -> np.
     return new_matrix    
     
     
-
 def return_path(matrix_type: str, matrix: np.ndarray, returned_index: int) -> np.ndarray:
     
     if matrix_type.lower() not in ['r', 'l', 'g', 'c']:
@@ -189,22 +244,46 @@ class CMatrix:
 
 if __name__ == '__main__':
     
-    c_matrix = np.array([
-        [1.41425, -1.24703, -0.05650],
-        [-1.24703, 2.52679, -1.24718],
-        [-0.05650, -1.24718, 1.41453]
-        ])
+    # c_matrix = np.array([
+    #     [1.41425, -1.24703, -0.05650],
+    #     [-1.24703, 2.52679, -1.24718],
+    #     [-0.05650, -1.24718, 1.41453]
+    #     ])
     
-    l_matrix = np.array([
-        [1.58802, 1.44881, 1.34183],
-        [1.44881, 1.57498, 1.44890],
-        [1.34183, 1.44890, 1.58792]
+    # l_matrix = np.array([
+    #     [1.58802, 1.44881, 1.34183],
+    #     [1.44881, 1.57498, 1.44890],
+    #     [1.34183, 1.44890, 1.58792]
+    # ])
+    
+    c_matrix = np.array([
+        [1.91438, -0.31573, -1.22443, -0.18926],
+        [-0.31573, 3.49369, -1.07587, -2.04621],
+        [-1.22443, -1.07587, 2.52529, -0.16173],
+        [-0.18926, -2.04621, -0.16173, 2.54894]
     ])
+    
+    l_matrix =  np.array([
+        [18.63865, 11.34468, 13.81999, 9.93892],
+        [11.34468, 20.32677, 14.66634, 14.85084],
+        [13.81999, 14.66634, 22.17347, 11.85285],
+        [9.93892, 14.85084, 11.85285, 20.50591]
+    ])
+    
+    l_matrix2 = float_net('L', l_matrix, 3)
+    
+    print(return_path('L', return_path('L', l_matrix2, 0), 0))
+    print(ground_net('L', ground_net('L', l_matrix2, 0), 0))
+    
+    
+    # print(float_net('C', c_matrix, 3))
+    
     
     # print(maxwell_to_spice('C', c_matrix))
     
+    
     # print(float_at_infinity('C', c_matrix))
     
-    print(ground_net('L', l_matrix, 0))
-    print(return_path('L', l_matrix, 0))
+    # print(ground_net('L', ground_net('L', l_matrix, 0), 0))
+    # print(return_path('L', return_path('L', l_matrix, 0), 0))
     
