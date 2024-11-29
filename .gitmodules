@@ -1,0 +1,24 @@
+[submodule "RT-CKT-API"]
+	path = RT-CKT-API
+	url = https://github.com/Realtek-Package-Software-Group/RT-CKT-API
+[submodule "RT-Qt-API"]
+	path = RT-Qt-API
+	url = https://github.com/Realtek-Package-Software-Group/RT-Qt-API
+[submodule "RT-NX-API"]
+	path = RT-NX-API
+	url = https://github.com/Realtek-Package-Software-Group/RT-NX-API
+[submodule "RT-ML-API"]
+	path = RT-ML-API
+	url = https://github.com/Realtek-Package-Software-Group/RT-ML-API
+[submodule "RT-Math-API"]
+	path = RT-Math-API
+	url = https://github.com/Realtek-Package-Software-Group/RT-Math-API
+[submodule "RT-Sigrity-API"]
+	path = RT-Sigrity-API
+	url = https://github.com/Realtek-Package-Software-Group/RT-Sigrity-API
+[submodule "RT-EDB-API"]
+	path = RT-EDB-API
+	url = https://github.com/Realtek-Package-Software-Group/RT-EDB-API
+[submodule "RT-Layout-DRC"]
+	path = RT-Layout-DRC
+	url = https://github.com/Realtek-Package-Software-Group/RT-Layout-DRC
