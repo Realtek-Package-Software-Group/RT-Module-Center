@@ -22,6 +22,3 @@
 [submodule "RT-Layout-DRC"]
 	path = RT-Layout-DRC
 	url = https://github.com/Realtek-Package-Software-Group/RT-Layout-DRC
-[submodule "RT-Module-Utility"]
-	path = RT-Module-Utility
-	url = https://github.com/Realtek-Package-Software-Group/RT-Module-Utility
