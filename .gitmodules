@@ -1,0 +1,4 @@
+[submodule "RT-CKT-API"]
+	path = RT-CKT-API
+	url = https://github.com/Realtek-Package-Software-Group/RT-CKT-API
+	branch = main
