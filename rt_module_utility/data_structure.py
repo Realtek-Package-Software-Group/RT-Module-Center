@@ -18,6 +18,11 @@ class NamedTuple:
 
         super().__setattr__('_attributes', list(kwargs.keys()))
 
+    def update_attr(self, attr_name, attr_value):  # we can only use this method to update attribute
+        
+        if attr_name in self._attributes:
+            super().__setattr__(attr_name, attr_value)
+    
     def __setattr__(self, key, value):  # to ensure the immutable feature of tuple
         raise AttributeError(f"Attribute '{key}' is immutable and cannot be modified")
     
